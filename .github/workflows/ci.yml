@@ -26,24 +26,24 @@ jobs:
       - name: Run tests
         run: go test -v -failfast ./...
 
-      - name: Build geth for Linux
-        run: GOOS=linux GOARCH=amd64 go build -o geth-linux ./cmd/geth
+      - name: Build inso for Linux
+        run: GOOS=linux GOARCH=amd64 go build -o inso-linux ./cmd/geth
 
-      - name: Build geth for macOS (amd64)
-        run: GOOS=darwin GOARCH=amd64 go build -o geth-darwin-amd64 ./cmd/geth
+      - name: Build indo for macOS (amd64)
+        run: GOOS=darwin GOARCH=amd64 go build -o inso-darwin-amd64 ./cmd/geth
 
-      - name: Build geth for macOS (arm64)
-        run: GOOS=darwin GOARCH=arm64 go build -o geth-darwin-arm64 ./cmd/geth
+      - name: Build inso for macOS (arm64)
+        run: GOOS=darwin GOARCH=arm64 go build -o inso-darwin-arm64 ./cmd/geth
 
-      - name: Build geth for Windows
-        run: GOOS=windows GOARCH=amd64 go build -o geth-windows.exe ./cmd/geth
+      - name: Build inso for Windows
+        run: GOOS=windows GOARCH=amd64 go build -o inso-windows.exe ./cmd/geth
 
-      - name: Upload all geth binaries
+      - name: Upload all inso binaries
         uses: actions/upload-artifact@v4
         with:
-          name: geth-binaries
+          name: inso-binaries
           path: |
-            geth-linux
-            geth-darwin-amd64
-            geth-darwin-arm64
-            geth-windows.exe
+            inso-linux
+            inso-darwin-amd64
+            inso-darwin-arm64
+            inso-windows.exe
