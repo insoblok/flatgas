@@ -2,17 +2,18 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth all test lint fmt clean devtools help
+.PHONY: inso all test lint fmt clean devtools help
 
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 
-#? geth: Build geth.
-geth:
+#? inso: Build inso binary by invoking ci.go and renaming geth
+inso:
 	$(GORUN) build/ci.go install ./cmd/geth
+	mv $(GOBIN)/geth $(GOBIN)/inso
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+	@echo "Run \"$(GOBIN)/inso\" to launch inso."
 
 #? all: Build all packages and executables.
 all:
