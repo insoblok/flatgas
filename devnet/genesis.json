@@ -14,7 +14,8 @@
     "clique": {
       "period": 5,
       "epoch": 30000
-    }
+    },
+    "terminalTotalDifficulty": 0
   },
   "difficulty": "1",
   "gasLimit": "8000000",
