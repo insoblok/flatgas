@@ -1,2 +1,2 @@
 #!/bin/bash
-exec ./scripts/run-devnet.sh ./devnet/data ./build/bin/inso
+exec ./run-devnet.sh ../data ../../build/bin/inso

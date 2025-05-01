@@ -61,3 +61,4 @@ cmd/workload/workload
 
 /data/
 /keys/
+/**/keys/**
