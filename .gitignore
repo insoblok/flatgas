@@ -58,3 +58,6 @@ cmd/rlpdump/rlpdump
 cmd/workload/workload
 
 .idea/
+
+/data/
+/keys/

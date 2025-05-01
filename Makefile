@@ -10,7 +10,7 @@ GORUN = go run
 
 #? inso: Build inso binary by invoking ci.go and renaming geth
 inso:
-	$(GORUN) build/ci.go install ./cmd/geth
+	$(GORUN) build/ci.go --tags personal install ./cmd/geth
 	mv $(GOBIN)/geth $(GOBIN)/inso
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/inso\" to launch inso."
