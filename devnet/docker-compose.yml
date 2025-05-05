@@ -6,58 +6,26 @@ services:
       - ./keys/nodekey:/app/keys/nodekey:ro
       - ./docker-data/node1:/app/data
       - ./genesis.json:/app/genesis.json:ro
+      - ./scripts/entrypoint-node1.sh:/app/entrypoint.sh:ro
     ports:
       - "8545:8545"
       - "8546:8546"
       - "30303:30303"
       - "30303:30303/udp"
-    command: >
-      sh -c '
-        if [ ! -d "/app/data/geth/chaindata" ]; then
-          echo "🧱 Initializing genesis block...";
-          inso  --nodekey /app/keys/nodekey --datadir /app/data init /app/genesis.json;
-        fi;
-        echo "🚀 Starting inso node...";
-        exec inso --nodekey /app/keys/nodekey --datadir /app/data
-             --http --http.api admin,debug,eth,miner,net,txpool,web3
-             --http.addr 0.0.0.0
-             --http.port 8545
-             --http.corsdomain "*"
-             --ws --ws.api eth,net,web3
-             --ws.addr 0.0.0.0
-             --ws.port 8546
-             --ws.origins "*"
-             --mine
-             --nodiscover
-             --networkid 12345
-             --allow-insecure-unlock
-      '
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+
   node2:
     image: flatgas-node
     container_name: flatgas-node2
+    depends_on:
+      - node1
     volumes:
       - ./keys/nodekey:/app/keys/nodekey:ro
       - ./docker-data/node2:/app/data
+      - ./scripts/entrypoint-node2.sh:/app/entrypoint.sh:ro
     ports:
       - "8547:8545"
       - "8548:8546"
       - "30304:30303"
       - "30304:30303/udp"
-    depends_on:
-      - node1
-    command: >
-      sh -c 'if [ ! -d "/app/data/geth/chaindata" ]; then
-               echo "⛓️ Connecting node2 to bootstrap node...";
-             fi;
-             exec inso --datadir /app/data
-             --http --http.api admin,debug,eth,net,txpool,web3
-             --http.addr 0.0.0.0
-             --http.port 8547
-             --http.corsdomain "*"
-             --ws --ws.api eth,net,web3
-             --ws.addr 0.0.0.0
-             --ws.port 8548
-             --ws.origins "*"
-             --bootnodes enode://6699c5a736e5f9a0699b0c10f94bbd564b32a7c84518b7b1d355fbc96fd4fa2116a88c9a30c4e4359f3ea13950b29e843bfa47d8aa921daef025ac0654398a02@flatgas-node1:30303
-             --networkid 12345
-             --allow-insecure-unlock'
+    entrypoint: ["sh", "/app/entrypoint.sh"]

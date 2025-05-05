@@ -63,3 +63,6 @@ cmd/workload/workload
 /keys/
 /**/keys/**
 **/data/**
+
+**/docker-data/**
+devnet/build/**
