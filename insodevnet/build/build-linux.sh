@@ -14,7 +14,7 @@ echo "📂 Output bin dir: $BIN_DIR"
 
 mkdir -p "$BIN_DIR"
 
-TARGETS=(abigen bootnode clef ethkey evm faucet geth rlpdump)
+TARGETS=(abidump  abigen   blsync   clef     devp2p   era      ethkey   evm      geth     rlpdump    workload)
 
 for TARGET in "${TARGETS[@]}"; do
   SRC="$REPO_ROOT/cmd/$TARGET"
