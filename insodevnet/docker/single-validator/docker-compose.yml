@@ -1,0 +1,13 @@
+services:
+  validator1:
+    image: insoblok/inso-node:dev
+    container_name: flatgas-validator1
+    entrypoint: /app/entrypoint.sh
+    volumes:
+      - ./genesis.json:/app/genesis.json
+      - ./keys:/app/keys
+      - ./data:/app/data
+      - ./entrypoint.sh:/app/entrypoint.sh
+    ports:
+      - "8545:8545"    # HTTP RPC
+      - "30303:30303"  # P2P
