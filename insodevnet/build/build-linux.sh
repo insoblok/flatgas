@@ -28,11 +28,10 @@ for TARGET in "${TARGETS[@]}"; do
   fi
 done
 
-echo "🎉 Done. Binaries in $BIN_DIR"
-
 # After geth is successfully built
-if  [ -f "$OUT_BIN_DIR/geth" ]; then
+if  [ -f "$BIN_DIR/geth" ]; then
   echo "🔁 Renaming geth to inso..."
-  mv "$OUT_BIN_DIR/geth" "$OUT_BIN_DIR/inso"
+  mv "$BIN_DIR/geth" "$BIN_DIR/inso"
 fi
 
+echo "🎉 Done. Binaries in $BIN_DIR"
