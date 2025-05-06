@@ -1,81 +1,106 @@
+# Flatgas `insotestnet` Roadmap
 
-# Insotestnet Roadmap
+## 🔮 Overview
 
-## Phase 0: Bootstrapping Local Testnet (Insotestnet)
-
-### 🎯 Goals
-- Simulate a realistic multi-node devnet.
-- Establish `inso` binary configuration norms.
-- Verify basic peer connectivity and transaction propagation.
+This document defines the setup plan for launching and operating `insotestnet`, a Flatgas-based internal test network. It also outlines the steps to migrate cleanly to a production-grade mainnet (`inso-mainnet`).
 
 ---
 
-## ✅ Step 1: Initialize Genesis Config
+## 🔢 Phase 1: Bootstrap `insotestnet`
 
-- Define `genesis.json` with required chainID, allocations, and config.
-- Copy it to all nodes.
-- Initialize all nodes using `inso init genesis.json`.
+### 1. Prepare `genesis.json`
 
----
+* Define chain ID (e.g., `12345`)
+* Configure block time, validator list, premine
+* Save at: `flatgas/networks/insotestnet/genesis.json`
 
-## ✅ Step 2: Configure Static/Boot Nodes
+### 2. Define Validator Set
 
-- Option A: Use `--bootnodes` CLI flag.
-- Option B: Use `static-nodes.json` file.
-- Option C: Use discovery and rely on internal DNS (Docker).
+* Generate `nodekey` files for each validator
+* Store in `flatgas/networks/insotestnet/keys/`
+* Build `static-nodes.json` listing peer enodes
 
-Recommended for testnet: **Option B**.
+### 3. Docker Compose Per Node
 
----
+* Compose files: `docker-compose.node1.yml`, etc.
+* Wait for `node1` to fully start, then bring up other nodes
 
-## ✅ Step 3: Create Scripts
+### 4. Bootstrap Scripts
 
-- `entrypoint-node1.sh`: initialize and start with mining.
-- `entrypoint-node2.sh`: connect to node1 using bootnode.
-- `attach-to-nodeX.sh`: attach Geth JS console.
+* Create `scripts/start-insotestnet.sh`
+* Automate:
 
----
+    * Chain initialization (`inso init`)
+    * Static peer config
+    * Key mounting
 
-## ✅ Step 4: Docker Compose Setup
+### 5. Observe the Network
 
-- `docker-compose.yml` to manage node containers.
-- Mount volumes for keys, data, and genesis.
-- Expose ports for RPC/WebSocket/P2P.
+* Use Geth console `admin.peers`, logs
+* Optional: run lightweight explorer or Prometheus/Grafana later
 
----
+### 6. Simulate Governance
 
-## ✅ Step 5: Peer Verification
+* Dummy proposals for flat fee review
+* Track epochs, simulate changes manually or with CLI tools
 
-- Use `admin.peers` on node consoles to verify P2P connections.
-- Test transactions and logs.
+### 7. Deploy Sample Transactions
 
----
-
-## ✅ Step 6: Docs & Maintenance
-
-- Document config, genesis file, and node setup process.
-- Version the `genesis.json` and `static-nodes.json`.
+* Send simple txs
+* Optionally deploy test contracts (if supported)
+* Observe mempool, inclusion, confirmation latency
 
 ---
 
-## 🔁 Step 7: Iteration and Scaling
+## 🚀 Phase 2: Transition to Production (`inso-mainnet`)
 
-- Add node3+ using `static-nodes.json`.
-- Observe peer discovery effects.
-- Test network behavior with one node down.
+### What Can Be Reused
+
+* `genesis.json` format and logic
+* Validator key generation + mounting system
+* Docker Compose and init scripts
+* Monitoring tools
+
+### What Must Be Changed
+
+* Harden `genesis.json`: no premine, updated validator list
+* Key handling: use secrets, HSMs or encrypted stores
+* Make `static-nodes.json` public or exposed via DNS seed
+* Add RPC protection (optional): rate limiting, TLS
+* Publish validator onboarding guides
+
+### Launch Checklist
+
+*
 
 ---
 
-## ⛳️ Migration to Production
+## ✅ Best Practices Summary
 
-- Fork from tested genesis.
-- Adjust validator list and initial allocation.
-- Remove dev-only accounts.
-- Set stricter configs and permissions.
+| Goal                | Best Practice                          |
+| ------------------- | -------------------------------------- |
+| Bootstrap stability | Use `static-nodes.json`, no discovery  |
+| Peer hygiene        | Start with few nodes, expand gradually |
+| Key management      | Automate or securely store nodekeys    |
+| Reproducibility     | Use scripts + tagged Docker images     |
+| Upgrade handling    | Plan versioning + hard fork activation |
 
 ---
 
-## Notes
+## 📂 Suggested Layout
 
-- Enforce consistent `networkid` across nodes.
-- Maintain enode URLs and nodekeys per environment.
+```
+flatgas/
+├── networks/
+│   └── insotestnet/
+│       ├── genesis.json
+│       ├── static-nodes.json
+│       ├── keys/
+│       │   ├── nodekey1
+│       │   └── nodekey2
+│       └── compose/
+│           ├── docker-compose.node1.yml
+│           └── docker-compose.node2.yml
+├── scripts/
+│   └── start-insotestnet.sh
+```
