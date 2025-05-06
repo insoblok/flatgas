@@ -1,33 +1,38 @@
 #!/bin/bash
 set -e
 
-# Resolve repository root from the script location
+echo "🔧 Building Flatgas Linux binaries..."
+
+# Determine repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BUILD_DIR="$SCRIPT_DIR/bin"
+BIN_DIR="$SCRIPT_DIR/bin"
 
-echo "🔧 Building Flatgas Linux binaries..."
 echo "📂 Script location: $SCRIPT_DIR"
 echo "📂 Repo root: $REPO_ROOT"
-echo "📂 Output bin dir: $BUILD_DIR"
+echo "📂 Output bin dir: $BIN_DIR"
 
-# Clean bin directory
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+mkdir -p "$BIN_DIR"
 
-# List of commands to build
-TARGETS=("geth")
+TARGETS=(abigen bootnode clef ethkey evm faucet geth rlpdump)
 
 for TARGET in "${TARGETS[@]}"; do
-  CMD_DIR="$REPO_ROOT/cmd/$TARGET"
-  if [ ! -d "$CMD_DIR" ]; then
-    echo "❌ Skipping $TARGET: source directory not found ($CMD_DIR)"
-    continue
-  fi
+  SRC="$REPO_ROOT/cmd/$TARGET"
+  OUT="$BIN_DIR/$TARGET"
 
-  echo "🛠️  Building $TARGET from $CMD_DIR..."
-  GOOS=linux GOARCH=amd64 go build -o "$BUILD_DIR/$TARGET" "$CMD_DIR"
-  echo "✅ Built $TARGET → $BUILD_DIR/$TARGET"
+  if [ -d "$SRC" ]; then
+    echo "🔨 Building $TARGET..."
+    GOOS=linux GOARCH=amd64 go build -o "$OUT" "$SRC"
+  else
+    echo "❌ Skipping $TARGET: source directory not found ($SRC)"
+  fi
 done
 
-echo "🎉 Done. Binaries in $BUILD_DIR"
+echo "🎉 Done. Binaries in $BIN_DIR"
+
+# After geth is successfully built
+if  [ -f "$OUT_BIN_DIR/geth" ]; then
+  echo "🔁 Renaming geth to inso..."
+  mv "$OUT_BIN_DIR/geth" "$OUT_BIN_DIR/inso"
+fi
+
