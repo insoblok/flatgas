@@ -66,3 +66,4 @@ cmd/workload/workload
 
 **/docker-data/**
 devnet/build/**
+/insodevnet/build/bin/
