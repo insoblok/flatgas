@@ -7,6 +7,7 @@ services:
       - ./genesis/genesis.json:/app/genesis.json
       - ./genesis/keys:/app/keys
       - ./data:/app/data
+      - ./nodekey:/app/nodekey
       - ./entrypoint.sh:/app/entrypoint.sh
     ports:
       - "8545:8545"    # HTTP RPC

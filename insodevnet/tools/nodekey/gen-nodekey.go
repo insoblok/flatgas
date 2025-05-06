@@ -15,13 +15,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: go run gen-nodekey.go <validator-name>")
-		os.Exit(1)
-	}
 
-	validator := os.Args[1]
-	keyDir := filepath.Join("insodevnet", "keys", validator)
+	keyDir := filepath.Join("insodevnet/docker/single-validator/nodekey")
 
 	if err := os.MkdirAll(keyDir, 0700); err != nil {
 		log.Fatalf("❌ Failed to create key directory: %v", err)

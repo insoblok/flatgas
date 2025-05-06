@@ -8,10 +8,8 @@ fi
 
 echo "🚀 Starting validator1 node..."
 exec inso --datadir /app/data \
-  --nodekey /app/keys/nodekey \
+  --nodekey /app/nodekey/nodekey \
   --networkid 12345 \
   --http --http.addr 0.0.0.0 --http.port 8545 \
-  --http.api eth,net,web3,admin,personal,clique \
+  --http.api eth,net,web3,admin,clique \
   --nodiscover \
-  --mine \
-  --allow-insecure-unlock
