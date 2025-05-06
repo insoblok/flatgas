@@ -6,6 +6,7 @@
       "epoch": 30000,
       "period": 5
     },
+    "terminalTotalDifficulty": 0,
     "constantinopleBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
