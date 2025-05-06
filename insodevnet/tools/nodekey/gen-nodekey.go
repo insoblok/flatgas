@@ -1,49 +1,67 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"log"
 	"net"
 	"os"
+	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 func main() {
-	dir := "insodevnet/keys/nodekeystore"
-
-	// Create keys dir if missing
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			log.Fatalf("Failed to create keys dir: %v", err)
-		}
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: go run gen-nodekey.go <validator-name>")
+		os.Exit(1)
 	}
 
-	// Generate private key
+	validator := os.Args[1]
+	keyDir := filepath.Join("insodevnet", "keys", validator)
+
+	if err := os.MkdirAll(keyDir, 0700); err != nil {
+		log.Fatalf("❌ Failed to create key directory: %v", err)
+	}
+
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		log.Fatalf("Failed to generate nodekey: %v", err)
 	}
 
-	node := enode.NewV4(&privKey.PublicKey, nil, 0, 0)
-	keyFileName := fmt.Sprintf("nodekey_%s", node.ID().String())
-	keyFile := fmt.Sprintf("%s/%s", dir, keyFileName)
+	keyFile := filepath.Join(keyDir, "nodekey")
 
+	// Save raw hex key
 	raw := crypto.FromECDSA(privKey)
+	nodeID := crypto.PubkeyToAddress(privKey.PublicKey).Hex()[2:]
 	if err := os.WriteFile(keyFile, []byte(hex.EncodeToString(raw)), 0600); err != nil {
 		log.Fatalf("Failed to write nodekey to %s: %v", keyFile, err)
 	}
 
-	// Generate enode URL manually with IP and ports
-	ip := net.ParseIP("127.0.0.1")
-	tcpPort := 30303
-	udpPort := 30303
-	node = enode.NewV4(&privKey.PublicKey, ip, tcpPort, udpPort)
+	pubkey := crypto.FromECDSAPub(&privKey.PublicKey)
+	hexPub := hex.EncodeToString(pubkey)
 
-	fmt.Println("✅ Nodekey saved to:", keyFile)
-	fmt.Println("🔗 Enode URL:", node.String())
-	fmt.Println("🧪 Node ID:", node.ID().String())
-	fmt.Println("📎 Public key:", hex.EncodeToString(crypto.FromECDSAPub(&privKey.PublicKey)))
-	fmt.Println("🔐 Private key:", hex.EncodeToString(raw))
+	// Enode URL
+	enodeURL := makeEnode(privKey, "127.0.0.1", 30303)
+
+	fmt.Printf("✅ Nodekey saved: %s\n", keyFile)
+	fmt.Printf("🔗 Enode URL: %s\n", enodeURL)
+	fmt.Printf("🧪 Node ID: %s\n", nodeID)
+	fmt.Printf("📎 Public key: %s\n", hexPub)
+
+	// Save static-nodes.json
+	staticNodes := []string{enodeURL}
+	staticNodesPath := filepath.Join(keyDir, "static-nodes.json")
+	staticData, _ := json.MarshalIndent(staticNodes, "", "  ")
+	os.WriteFile(staticNodesPath, staticData, 0644)
+
+	fmt.Printf("📄 static-nodes.json written: %s\n", staticNodesPath)
+}
+
+func makeEnode(priv *ecdsa.PrivateKey, ip string, port int) string {
+	node := enode.NewV4(&priv.PublicKey, net.ParseIP(ip), int(uint16(port)), int(uint16(port)))
+	return node.String()
 }
