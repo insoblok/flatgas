@@ -26,8 +26,12 @@ func main() {
 	// Generate genesis file
 	genesis := BuildGenesis(accounts, validator)
 
-	// Write to file
-	file := "insodevnet/genesis/genesis.json"
+	dir := "insodevnet/genesis"
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		log.Fatalf("Failed to create genesis dir: %v", err)
+	}
+
+	file := dir + "/genesis.json"
 	err = os.WriteFile(file, genesis, 0644)
 	if err != nil {
 		log.Fatalf("Failed to write genesis file: %v", err)
