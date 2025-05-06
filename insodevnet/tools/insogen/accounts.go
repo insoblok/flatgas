@@ -7,17 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 )
 
-func GenerateAccounts(n int, passphrase string) ([]DevAccount, error) {
+func GenerateAccounts(accountTargetDir string, n int, passphrase string) ([]DevAccount, error) {
 	if n <= 0 {
 		return nil, fmt.Errorf("account count must be positive")
 	}
 
-	dir := "insodevnet/keys/devaccounts"
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create accounts directory: %v", err)
-	}
-
-	ks := keystore.NewKeyStore(dir, keystore.StandardScryptN, keystore.StandardScryptP)
+	ks := keystore.NewKeyStore(accountTargetDir, keystore.StandardScryptN, keystore.StandardScryptP)
 	var devAccounts []DevAccount
 
 	for i := 0; i < n; i++ {

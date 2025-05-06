@@ -4,8 +4,8 @@ services:
     container_name: flatgas-validator1
     entrypoint: /app/entrypoint.sh
     volumes:
-      - ./genesis.json:/app/genesis.json
-      - ./keys:/app/keys
+      - ./genesis/genesis.json:/app/genesis.json
+      - ./genesis/keys:/app/keys
       - ./data:/app/data
       - ./entrypoint.sh:/app/entrypoint.sh
     ports:

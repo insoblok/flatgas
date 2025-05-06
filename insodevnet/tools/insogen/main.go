@@ -9,33 +9,34 @@ import (
 func main() {
 	fmt.Println("🔧 Flatgas Genesis Generator")
 
-	// Example: generate 3 dev accounts
-	accounts, err := GenerateAccounts(3, "flatgas")
+	genesisTargetDir := "insodevnet/docker/single-validator/genesis"
+	genesisTargetFile := genesisTargetDir + "/genesis.json"
+	accountTargetDir := genesisTargetDir + "/keys/devaccounts"
+
+	if err := os.MkdirAll(genesisTargetDir, 0700); err != nil {
+		log.Fatalf("Failed to create genesis dir: %v", err)
+	}
+	if err := os.MkdirAll(accountTargetDir, 0700); err != nil {
+		log.Fatalf("Failed to create account dir: %v", err)
+	}
+
+	accounts, err := GenerateAccounts(accountTargetDir, 3, "flatgas")
 	if err != nil {
 		log.Fatalf("Failed to generate accounts: %v", err)
 	}
 
-	// Print addresses
 	for i, acc := range accounts {
 		fmt.Printf("Account %d: %s\n", i+1, acc.Address.Hex())
 	}
 
-	// Use first account as validator
 	validator := accounts[0].Address
 
-	// Generate genesis file
 	genesis := BuildGenesis(accounts, validator)
 
-	dir := "insodevnet/genesis"
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		log.Fatalf("Failed to create genesis dir: %v", err)
-	}
-
-	file := dir + "/genesis.json"
-	err = os.WriteFile(file, genesis, 0644)
+	err = os.WriteFile(genesisTargetFile, genesis, 0644)
 	if err != nil {
 		log.Fatalf("Failed to write genesis file: %v", err)
 	}
 
-	fmt.Printf("✅ Genesis written to %s\n", file)
+	fmt.Printf("✅ Genesis written to %s\n", genesisTargetFile)
 }

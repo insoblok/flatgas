@@ -45,7 +45,7 @@ func BuildGenesis(accounts []DevAccount, validator common.Address) []byte {
 			"istanbulBlock":           0,
 			"berlinBlock":             0,
 			"londonBlock":             0,
-			"terminalTotalDifficulty": "0x0",
+			"terminalTotalDifficulty": 0,
 			"clique": map[string]interface{}{
 				"period": blockTime,
 				"epoch":  epoch,
