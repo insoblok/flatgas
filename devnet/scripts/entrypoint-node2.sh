@@ -1,9 +1,12 @@
 #!/bin/sh
 set -e
 
-# Dynamically resolve IP of flatgas-node1 using Docker internal DNS
-BOOTNODE_IP=$(getent hosts flatgas-node1 | awk '{ print $1 }')
+if [ ! -d "/app/data/geth/chaindata" ]; then
+  echo "🧱 Initializing genesis block for node2..."
+  inso --datadir /app/data init /app/genesis.json
+fi
 
+BOOTNODE_IP=$(getent hosts flatgas-node1 | awk '{ print $1 }')
 echo "⛓️ Connecting node2 to bootstrap node at IP: $BOOTNODE_IP"
 
 exec inso --datadir /app/data \

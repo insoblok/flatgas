@@ -13,19 +13,3 @@ services:
       - "30303:30303"
       - "30303:30303/udp"
     entrypoint: ["sh", "/app/entrypoint.sh"]
-
-  node2:
-    image: flatgas-node
-    container_name: flatgas-node2
-    depends_on:
-      - node1
-    volumes:
-      - ./keys/nodekey:/app/keys/nodekey:ro
-      - ./docker-data/node2:/app/data
-      - ./scripts/entrypoint-node2.sh:/app/entrypoint.sh:ro
-    ports:
-      - "8547:8545"
-      - "8548:8546"
-      - "30304:30303"
-      - "30304:30303/udp"
-    entrypoint: ["sh", "/app/entrypoint.sh"]
