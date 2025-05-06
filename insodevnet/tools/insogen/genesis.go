@@ -1,82 +1,72 @@
 package main
 
 import (
-	"encoding/json"
-	"math/big"
-
 	"crypto/ecdsa"
-
+	"encoding/hex"
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
+	"log"
 )
 
-type GenesisAlloc map[common.Address]GenesisAccount
-
-type GenesisAccount struct {
-	Balance string `json:"balance"`
-}
-
-type Genesis struct {
-	Config     map[string]interface{} `json:"config"`
-	Nonce      string                 `json:"nonce"`
-	Timestamp  string                 `json:"timestamp"`
-	ExtraData  string                 `json:"extraData"`
-	GasLimit   string                 `json:"gasLimit"`
-	Difficulty string                 `json:"difficulty"`
-	MixHash    string                 `json:"mixHash"`
-	Coinbase   string                 `json:"coinbase"`
-	Alloc      GenesisAlloc           `json:"alloc"`
-	Number     string                 `json:"number"`
-	GasUsed    string                 `json:"gasUsed"`
-	ParentHash string                 `json:"parentHash"`
-}
-
-// DevAccount holds address and key info for test accounts
 type DevAccount struct {
 	Address    common.Address
 	PrivateKey *ecdsa.PrivateKey
 }
 
-func BuildGenesis(accounts []DevAccount) []byte {
-	alloc := make(GenesisAlloc)
+// BuildGenesis generates a valid Clique genesis.json from DevAccounts.
+func BuildGenesis(accounts []DevAccount, validator common.Address) []byte {
+	const (
+		chainID   = 12345
+		blockTime = 5
+		epoch     = 30000
+	)
 
-	// Allocate 100 ETH to each dev account
-	initialBalance := new(big.Int).Mul(big.NewInt(100), big.NewInt(1e18)) // 100 ETH
-
+	alloc := make(map[string]map[string]string)
 	for _, acc := range accounts {
-		alloc[acc.Address] = GenesisAccount{
-			Balance: initialBalance.String(),
+		alloc[acc.Address.Hex()] = map[string]string{
+			"balance": "0xfffffffffffffffffffff", // Large initial balance
 		}
 	}
 
-	genesis := Genesis{
-		Config: map[string]interface{}{
-			"chainId":             12345,
-			"homesteadBlock":      0,
-			"eip150Block":         0,
-			"eip155Block":         0,
-			"eip158Block":         0,
-			"byzantiumBlock":      0,
-			"constantinopleBlock": 0,
-			"petersburgBlock":     0,
-			"istanbulBlock":       0,
+	// extraData = 32 bytes vanity + validator address (20 bytes) + 65 bytes padding = 32 + 20 + 65 = 117 bytes
+	extraData := make([]byte, 32+20+65)
+	copy(extraData[32:], validator.Bytes())
+
+	genesis := map[string]interface{}{
+		"config": map[string]interface{}{
+			"chainId":                 chainID,
+			"homesteadBlock":          0,
+			"eip150Block":             0,
+			"eip155Block":             0,
+			"eip158Block":             0,
+			"byzantiumBlock":          0,
+			"constantinopleBlock":     0,
+			"petersburgBlock":         0,
+			"istanbulBlock":           0,
+			"berlinBlock":             0,
+			"londonBlock":             0,
+			"terminalTotalDifficulty": "0x0",
 			"clique": map[string]interface{}{
-				"period": 5,
-				"epoch":  30000,
+				"period": blockTime,
+				"epoch":  epoch,
 			},
 		},
-		Nonce:      "0x0",
-		Timestamp:  "0x0",
-		ExtraData:  "0x0",      // will need to be updated with validator info if Clique is used
-		GasLimit:   "0x47b760", // 4700000
-		Difficulty: "0x1",
-		MixHash:    "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase:   "0x0000000000000000000000000000000000000000",
-		Alloc:      alloc,
-		Number:     "0x0",
-		GasUsed:    "0x0",
-		ParentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		"nonce":      "0x0",
+		"timestamp":  "0x0",
+		"extraData":  "0x" + hex.EncodeToString(extraData),
+		"gasLimit":   "0x47b760", // ~4700000
+		"difficulty": "0x1",
+		"mixHash":    "0x0000000000000000000000000000000000000000000000000000000000000000",
+		"coinbase":   "0x0000000000000000000000000000000000000000",
+		"alloc":      alloc,
+		"number":     "0x0",
+		"gasUsed":    "0x0",
+		"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
 	}
 
-	jsonBytes, _ := json.MarshalIndent(genesis, "", "  ")
-	return jsonBytes
+	data, err := json.MarshalIndent(genesis, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal genesis: %v", err)
+	}
+	return data
 }

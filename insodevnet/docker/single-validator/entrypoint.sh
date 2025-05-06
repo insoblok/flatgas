@@ -11,7 +11,7 @@ exec inso --datadir /app/data \
   --nodekey /app/keys/nodekey \
   --networkid 12345 \
   --http --http.addr 0.0.0.0 --http.port 8545 \
-  --http.api eth,net,web3,admin \
+  --http.api eth,net,web3,admin,personal,clique \
   --nodiscover \
   --mine \
   --allow-insecure-unlock
