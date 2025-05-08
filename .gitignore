@@ -67,3 +67,7 @@ cmd/workload/workload
 **/docker-data/**
 devnet/build/**
 /insodevnet/build/bin/
+/insodevnet/cloud/**
+nodekey
+*.tar
+*.zip
