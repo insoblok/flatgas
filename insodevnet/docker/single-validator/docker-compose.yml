@@ -1,6 +1,6 @@
 services:
   validator1:
-    image: insoblok/inso-node:dev
+    image: insoblok/inso-node:do
     container_name: flatgas-validator1
     entrypoint: /app/entrypoint.sh
     volumes:
