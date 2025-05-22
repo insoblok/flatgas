@@ -17,6 +17,7 @@ func main() {
 
 	rootCmd.AddCommand(
 		cmd.GetConfigCommand(),
+		cmd.GetAccountsCommand(),
 	)
 	fmt.Println("🚀 txsender CLI starting...")
 
