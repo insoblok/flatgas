@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	rpcName string
-	rpcURL  string
+	rpcName        string
+	rpcURL         string
+	defaultRPCName string
 )
 
 var configCmd = &cobra.Command{
@@ -53,8 +54,40 @@ var listRpcsCmd = &cobra.Command{
 
 		fmt.Println("📡 Configured RPCs:")
 		for name, url := range cfgData.RPCs {
-			fmt.Printf("  %s => %s\n", name, url)
+			marker := ""
+			if name == cfgData.DefaultRPC {
+				marker = " ✅"
+			}
+			fmt.Printf("  %s => %s%s\n", name, url, marker)
 		}
+		return nil
+	},
+}
+
+var setDefaultRpcCmd = &cobra.Command{
+	Use:   "set-default-rpc",
+	Short: "Set the default RPC to use for all commands",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		if defaultRPCName == "" {
+			return fmt.Errorf("--name is required")
+		}
+
+		cfgData, err := cfg.LoadConfig(base)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		if _, exists := cfgData.RPCs[defaultRPCName]; !exists {
+			return fmt.Errorf("RPC name '%s' not found in config", defaultRPCName)
+		}
+
+		cfgData.DefaultRPC = defaultRPCName
+		if err := cfg.SaveConfig(base, cfgData); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		fmt.Printf("✅ Default RPC set to '%s'\n", defaultRPCName)
 		return nil
 	},
 }
@@ -63,10 +96,15 @@ func init() {
 	addRpcCmd.Flags().StringVar(&rpcName, "name", "", "Alias for the RPC node")
 	addRpcCmd.Flags().StringVar(&rpcURL, "url", "", "RPC endpoint URL")
 	addRpcCmd.Flags().String("base", ".", "Base path to flatgas root")
+
 	listRpcsCmd.Flags().String("base", ".", "Base path to flatgas root")
+
+	setDefaultRpcCmd.Flags().StringVar(&defaultRPCName, "name", "", "Alias of RPC to set as default")
+	setDefaultRpcCmd.Flags().String("base", ".", "Base path to flatgas root")
 
 	configCmd.AddCommand(addRpcCmd)
 	configCmd.AddCommand(listRpcsCmd)
+	configCmd.AddCommand(setDefaultRpcCmd)
 }
 
 func GetConfigCommand() *cobra.Command {
