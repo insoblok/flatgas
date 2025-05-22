@@ -75,10 +75,37 @@ var createAccountCmd = &cobra.Command{
 	},
 }
 
+var listAccountsCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all known accounts",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		aliasesPath := filepath.Join(base, "wallet", "aliases.json")
+		data, err := os.ReadFile(aliasesPath)
+		if err != nil {
+			return fmt.Errorf("failed to read aliases file: %w", err)
+		}
+
+		var aliases map[string]string
+		if err := json.Unmarshal(data, &aliases); err != nil {
+			return fmt.Errorf("failed to parse aliases: %w", err)
+		}
+
+		fmt.Println("📁 Known accounts:")
+		for alias, address := range aliases {
+			fmt.Printf("  %s => %s\n", alias, address)
+		}
+		return nil
+	},
+}
+
 func init() {
 	createAccountCmd.Flags().StringVar(&createAlias, "alias", "", "Alias for the new account")
 	createAccountCmd.Flags().StringVar(&createPassword, "password", "", "Password to encrypt the keyfile")
 	createAccountCmd.Flags().String("base", ".", "Base path to flatgas root")
 
+	listAccountsCmd.Flags().String("base", ".", "Base path to flatgas root")
+
 	accountsCmd.AddCommand(createAccountCmd)
+	accountsCmd.AddCommand(listAccountsCmd)
 }
