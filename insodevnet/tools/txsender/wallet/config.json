@@ -1,6 +1,7 @@
 {
-  "defaultRpc": "",
+  "defaultRpc": "devnet",
   "rpcs": {
-    "devnet": "http://178.156.166.184:8545"
+    "devnet": "http://178.156.166.184:8545",
+    "local" : "http://localhost:8545"
   }
 }

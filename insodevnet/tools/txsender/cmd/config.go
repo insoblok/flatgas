@@ -41,12 +41,32 @@ var addRpcCmd = &cobra.Command{
 	},
 }
 
+var listRpcsCmd = &cobra.Command{
+	Use:   "list-rpcs",
+	Short: "List configured RPC aliases",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		cfgData, err := cfg.LoadConfig(base)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		fmt.Println("📡 Configured RPCs:")
+		for name, url := range cfgData.RPCs {
+			fmt.Printf("  %s => %s\n", name, url)
+		}
+		return nil
+	},
+}
+
 func init() {
 	addRpcCmd.Flags().StringVar(&rpcName, "name", "", "Alias for the RPC node")
 	addRpcCmd.Flags().StringVar(&rpcURL, "url", "", "RPC endpoint URL")
 	addRpcCmd.Flags().String("base", ".", "Base path to flatgas root")
+	listRpcsCmd.Flags().String("base", ".", "Base path to flatgas root")
 
 	configCmd.AddCommand(addRpcCmd)
+	configCmd.AddCommand(listRpcsCmd)
 }
 
 func GetConfigCommand() *cobra.Command {
