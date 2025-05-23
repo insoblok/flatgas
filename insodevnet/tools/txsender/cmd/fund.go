@@ -20,6 +20,8 @@ var (
 	fundTo       string
 	fundAmount   float64
 	fundPassword string
+	fundRPC      string
+	fundSend     bool
 )
 
 var fundCmd = &cobra.Command{
@@ -27,7 +29,14 @@ var fundCmd = &cobra.Command{
 	Short: "Send ETH from a known account to another alias or address",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		base, _ := cmd.Flags().GetString("base")
-		rpcURL, _ := cmd.Flags().GetString("rpc")
+		rpcURL := fundRPC
+
+		cfgData, err := internal.LoadConfig(base)
+		if err == nil {
+			if resolved, ok := cfgData.RPCs[fundRPC]; ok {
+				rpcURL = resolved
+			}
+		}
 
 		fromAddr, err := internal.ResolveAddressOrAlias(base, fundFrom)
 		if err != nil {
@@ -88,6 +97,13 @@ var fundCmd = &cobra.Command{
 			return fmt.Errorf("failed to sign tx: %w", err)
 		}
 
+		if !fundSend {
+			fmt.Println("🧪 Dry run successful. Transaction prepared but not broadcast.")
+			fmt.Printf("🔗 Would send %f ETH from %s to %s\n", fundAmount, fromAddr, toAddr)
+			fmt.Printf("📦 Tx hash (preview): %s\n", signedTx.Hash().Hex())
+			return nil
+		}
+
 		if err := client.SendTransaction(context.Background(), signedTx); err != nil {
 			return fmt.Errorf("failed to send tx: %w", err)
 		}
@@ -103,8 +119,9 @@ func init() {
 	fundCmd.Flags().StringVar(&fundTo, "to", "", "Alias or address of recipient")
 	fundCmd.Flags().Float64Var(&fundAmount, "amount", 0, "Amount in ETH to send")
 	fundCmd.Flags().StringVar(&fundPassword, "password", "", "Password for sender account")
+	fundCmd.Flags().StringVar(&fundRPC, "rpc", "http://localhost:8545", "RPC endpoint URL or alias")
+	fundCmd.Flags().BoolVar(&fundSend, "send", false, "Broadcast the transaction (default is dry run)")
 	fundCmd.Flags().String("base", ".", "Base path to flatgas root")
-	fundCmd.Flags().String("rpc", "http://localhost:8545", "RPC endpoint URL")
 }
 
 func GetFundCommand() *cobra.Command {
