@@ -110,4 +110,5 @@ func init() {
 	accountsCmd.AddCommand(listAccountsCmd)
 	accountsCmd.AddCommand(accountsBalanceCmd)
 	accountsCmd.AddCommand(accountsImportCmd)
+	accountsCmd.AddCommand(accountsExportCmd)
 }
