@@ -71,5 +71,5 @@ devnet/build/**
 nodekey
 *.tar
 *.zip
-/wallet/keystore/**
-txsender
+insodevnet/tools/txsender/wallet/keystore/**
+insodevnet/tools/txsender/txsender
