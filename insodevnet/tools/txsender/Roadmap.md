@@ -27,20 +27,27 @@ This roadmap defines the command-line interface structure and functionality for 
 ### 🖥️ Node Interaction
 - [x] `node info` — show current chain ID, latest block, gas price, peer count
 
-## 🔜 Optional / Future
+## 🔜 Planned Features
 
-### ⛓️ Chain Monitoring
-- [ ] `tx watch` — live poll a TX until mined
-- [ ] `tx receipt` — extended version of `tx status`
+### 🔄 Transactions
+- [ ] `tx receipt` — detailed transaction result, logs, gas used
+- [ ] `tx watch` — polling-based monitor until TX is mined (in `txsender`)
 
-### 🧑‍💻 UX Improvements
-- [ ] `menu` — TUI-based interactive interface (optional)
-- [ ] `accounts delete` / `rename`
+### 🌐 Node and Chain
+- [ ] `block latest` — get latest block metadata
+- [ ] `node peers` — list active P2P peers
 
-### 🌐 Optional Network Utilities
-- [ ] `node peers` — show connected P2P peers
-- [ ] `block latest` — fetch latest block header or number
+### 🔐 Wallet Enhancements
+- [ ] `accounts delete` — remove alias and keystore
+- [ ] `accounts rename` — rename alias
+
+## 📡 WebSocket & Event Monitoring (Future)
+
+Planned for separate tool/module: `insowatch`
+- Watch contract logs, pending TXs, block headers
+- Uses `eth_subscribe` via WebSocket
+- Can emit logs, webhooks, or write to file
 
 ---
 
-The core CLI is complete and testnet-ready. 🎉
+The core CLI is complete and stable. Next steps focus on network awareness, event monitoring, and usability improvements.
