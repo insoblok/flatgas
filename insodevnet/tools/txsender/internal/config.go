@@ -136,9 +136,6 @@ func SaveConfig(base string, cfg Config) error {
 	if err := os.Rename(dataStoreConfig.StoreFilePath, archivePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to archive existing config: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to initialize config store: %w", err)
-	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
