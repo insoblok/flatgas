@@ -125,7 +125,6 @@ func LoadConfig(base string) (Config, error) {
 	return cfg, nil
 }
 
-// SaveConfig writes the config to wallet/config.json.
 func SaveConfig(base string, cfg Config) error {
 	dataStoreConfig, err := ConfigStore(base)
 	if err != nil {
