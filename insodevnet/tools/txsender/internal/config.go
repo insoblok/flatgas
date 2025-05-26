@@ -2,7 +2,8 @@ package internal
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -12,20 +13,102 @@ type Config struct {
 	RPCs       map[string]string `json:"rpcs"`
 }
 
-// ConfigPath returns the full path to the wallet config file.
-func ConfigPath(base string) string {
-	return filepath.Join(base, "wallet", "config.json")
+func ConfigStore(base string) (DataStoreConfig, error) {
+	// Step 1: Validate that the base path exists, is readable, and writeable
+	info, err := os.Stat(base)
+	if err != nil {
+		return DataStoreConfig{}, fmt.Errorf("base directory does not exist or cannot be accessed: %w", err)
+	}
+	if !info.IsDir() {
+		return DataStoreConfig{}, fmt.Errorf("base path is not a directory")
+	}
+
+	// Check if write permissions are available
+	testFilePath := filepath.Join(base, ".test")
+	file, err := os.Create(testFilePath)
+	if err != nil {
+		return DataStoreConfig{}, fmt.Errorf("base directory is not writeable: %w", err)
+	}
+	file.Close()
+	os.Remove(testFilePath) // Clean up the temporary test file
+
+	// Step 2: Initialize configuration values
+	walletName := "wallet"
+	storeBaseName := "config"
+	configDir := filepath.Join(base, walletName, storeBaseName)
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(configDir, 0700); err != nil {
+			return DataStoreConfig{}, fmt.Errorf("failed to create config directory: %w", err)
+		}
+	}
+
+	storeFileName := "config.json"
+	storeFilePath := filepath.Join(configDir, storeFileName)
+	archiveDir := filepath.Join(configDir, "archive")
+	if _, err := os.Stat(archiveDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(archiveDir, 0700); err != nil {
+			return DataStoreConfig{}, fmt.Errorf("failed to create archive directory: %w", err)
+		}
+	}
+
+	// Step 3: Calculate StoreCurrentVersion based on the number of files in the archive directory
+	storeCurrentVersion, err := calculateVersion(archiveDir)
+	if err != nil {
+		return DataStoreConfig{}, err
+	}
+
+	// Step 4: Return the populated DataStoreConfig struct
+	return DataStoreConfig{
+		BaseDir:             base,
+		StoreBaseName:       storeBaseName,
+		StoreBaseDir:        configDir,
+		StoreFileName:       storeFileName,
+		StoreFilePath:       storeFilePath,
+		ArchiveDir:          archiveDir,
+		StoreCurrentVersion: storeCurrentVersion,
+	}, nil
+}
+
+// Helper function to count the number of files in the archive directory
+func calculateVersion(archiveDir string) (int, error) {
+	// Ensure archive directory exists or create it
+	if _, err := os.Stat(archiveDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(archiveDir, os.ModePerm); err != nil {
+			return 0, fmt.Errorf("failed to create archive directory: %w", err)
+		}
+	}
+
+	// Count files in archiveDir
+	files, err := ioutil.ReadDir(archiveDir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read archive directory: %w", err)
+	}
+
+	// Return count of files + 1 as the current store version
+	return len(files) + 1, nil
 }
 
 // LoadConfig loads the config from wallet/config.json.
 func LoadConfig(base string) (Config, error) {
-	path := ConfigPath(base)
-
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return Config{RPCs: make(map[string]string)}, nil // return empty config
+	config, err := ConfigStore(base)
+	if err != nil {
+		return Config{}, fmt.Errorf("failed to initialize config store: %w", err)
 	}
 
-	data, err := os.ReadFile(path)
+	// Check if config file exists
+	if _, err := os.Stat(config.StoreFilePath); os.IsNotExist(err) {
+		// Initialize empty config if file doesn't exist
+		cfg := Config{
+			DefaultRPC: "",
+			RPCs:       make(map[string]string),
+		}
+		err := SaveConfig(base, cfg)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+
+	data, err := os.ReadFile(config.StoreFilePath)
 	if err != nil {
 		return Config{}, err
 	}
@@ -44,17 +127,23 @@ func LoadConfig(base string) (Config, error) {
 
 // SaveConfig writes the config to wallet/config.json.
 func SaveConfig(base string, cfg Config) error {
-	path := ConfigPath(base)
+	dataStoreConfig, err := ConfigStore(base)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config store: %w", err)
+	}
 
-	// Ensure wallet dir exists
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
+	archivePath := filepath.Join(dataStoreConfig.ArchiveDir, fmt.Sprintf("%s.%d", filepath.Base(dataStoreConfig.StoreFilePath), dataStoreConfig.StoreCurrentVersion))
+	if err := os.Rename(dataStoreConfig.StoreFilePath, archivePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to archive existing config: %w", err)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to initialize config store: %w", err)
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return os.WriteFile(dataStoreConfig.StoreFilePath, data, 0600)
 }
