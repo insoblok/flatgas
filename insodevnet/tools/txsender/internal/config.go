@@ -71,3 +71,19 @@ func SaveConfig(base string, cfg Config) error {
 
 	return os.WriteFile(dataStoreConfig.StoreFilePath, data, 0600)
 }
+
+func Rollback(base string) error {
+	dataStoreConfig, err := ConfigStore(base)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config store: %w", err)
+	}
+	if err := os.Remove(dataStoreConfig.StoreFilePath); err != nil {
+		return fmt.Errorf("failed to delete config file: %w", err)
+	}
+
+	archivePath := filepath.Join(dataStoreConfig.ArchiveDir, fmt.Sprintf("%s.%d", filepath.Base(dataStoreConfig.StoreFilePath), dataStoreConfig.StoreCurrentVersion-1))
+	if err := os.Rename(archivePath, dataStoreConfig.StoreFilePath); err != nil {
+		return fmt.Errorf("failed to rollback config: %w", err)
+	}
+	return nil
+}

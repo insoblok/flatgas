@@ -42,6 +42,21 @@ var addRpcCmd = &cobra.Command{
 	},
 }
 
+var rollBackRpcCmd = &cobra.Command{
+	Use:   "rollback",
+	Short: "Rollback latest changes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+
+		err := cfg.Rollback(base)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		return nil
+	},
+}
+
 var listRpcsCmd = &cobra.Command{
 	Use:   "list-rpcs",
 	Short: "List configured RPC aliases",
@@ -102,9 +117,12 @@ func init() {
 	setDefaultRpcCmd.Flags().StringVar(&defaultRPCName, "name", "", "Alias of RPC to set as default")
 	setDefaultRpcCmd.Flags().String("base", ".", "Base path to flatgas root")
 
+	rollBackRpcCmd.Flags().String("base", ".", "Base path to flatgas root")
+
 	configCmd.AddCommand(addRpcCmd)
 	configCmd.AddCommand(listRpcsCmd)
 	configCmd.AddCommand(setDefaultRpcCmd)
+	configCmd.AddCommand(rollBackRpcCmd)
 }
 
 func GetConfigCommand() *cobra.Command {
