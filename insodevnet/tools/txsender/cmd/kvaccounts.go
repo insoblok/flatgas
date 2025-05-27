@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -91,6 +92,9 @@ var kvCreateCmd = &cobra.Command{
 		if err := internal.WriteJournalEntry(db, entry); err != nil {
 			log.Fatalf("failed to write journal entry: %v", err)
 		}
+		if err := internal.WriteAuditLogEntry(db, entry); err != nil {
+			log.Fatalf("failed to write audit log entry: %v", err)
+		}
 
 		fmt.Printf("✅ Created alias '%s' → %s\n", record.Alias, record.Address)
 		return nil
@@ -129,11 +133,54 @@ var kvListCmd = &cobra.Command{
 	},
 }
 
+var kvHistoryCmd = &cobra.Command{
+	Use:   "history",
+	Short: "View recent journal entries from the kvstore",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		dbPath := internal.GetDBFilePath(base)
+		db, err := bbolt.Open(dbPath, 0600, nil)
+		if err != nil {
+			return fmt.Errorf("failed to open db: %w", err)
+		}
+		defer db.Close()
+
+		var entries []internal.JournalEntry
+		err = db.View(func(tx *bbolt.Tx) error {
+			bucket := tx.Bucket([]byte("journal"))
+			if bucket == nil {
+				fmt.Println("No journal entries found.")
+				return nil
+			}
+			return bucket.ForEach(func(k, v []byte) error {
+				var entry internal.JournalEntry
+				if err := json.Unmarshal(v, &entry); err != nil {
+					return err
+				}
+				entries = append(entries, entry)
+				return nil
+			})
+		})
+		if err != nil {
+			return err
+		}
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].Timestamp.After(entries[j].Timestamp)
+		})
+		fmt.Println("🕓 Journal History:")
+		for _, e := range entries {
+			fmt.Printf("- [%s] %s %s\n", e.Timestamp.Format("2006-01-02 15:04:05"), e.Action, e.Alias)
+		}
+		return nil
+	},
+}
+
 func GetKVAccountsCommand() *cobra.Command {
 	kvaccountsCmd.PersistentFlags().String("base", ".", "Base path to flatgas repo")
 	kvCreateCmd.Flags().StringVar(&kvAlias, "alias", "", "Alias for the new account")
 	kvCreateCmd.Flags().StringVar(&kvPassword, "password", "", "Password to encrypt key")
 	kvaccountsCmd.AddCommand(kvCreateCmd)
 	kvaccountsCmd.AddCommand(kvListCmd)
+	kvaccountsCmd.AddCommand(kvHistoryCmd)
 	return kvaccountsCmd
 }
