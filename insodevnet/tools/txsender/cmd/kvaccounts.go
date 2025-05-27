@@ -175,6 +175,119 @@ var kvHistoryCmd = &cobra.Command{
 	},
 }
 
+var kvRollbackCmd = &cobra.Command{
+	Use:   "rollback",
+	Short: "Rollback the most recent journaled action",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		dbPath := internal.GetDBFilePath(base)
+		db, err := bbolt.Open(dbPath, 0600, nil)
+		if err != nil {
+			return fmt.Errorf("failed to open db: %w", err)
+		}
+		defer db.Close()
+
+		var lastKey []byte
+		var lastEntry internal.JournalEntry
+		err = db.View(func(tx *bbolt.Tx) error {
+			bucket := tx.Bucket([]byte("journal"))
+			if bucket == nil {
+				return fmt.Errorf("no journal entries to rollback")
+			}
+			c := bucket.Cursor()
+			k, v := c.Last()
+			if k == nil {
+				return fmt.Errorf("journal is empty")
+			}
+			lastKey = k
+			return json.Unmarshal(v, &lastEntry)
+		})
+		if err != nil {
+			return err
+		}
+
+		if lastEntry.Action != internal.ActionCreate {
+			return fmt.Errorf("rollback for '%s' not implemented", lastEntry.Action)
+		}
+
+		err = db.Update(func(tx *bbolt.Tx) error {
+			// Remove alias
+			aliases := tx.Bucket([]byte("aliases"))
+			if aliases == nil {
+				return fmt.Errorf("aliases bucket not found")
+			}
+			if err := aliases.Delete([]byte(lastEntry.Alias)); err != nil {
+				return err
+			}
+
+			// Remove from journal
+			journal := tx.Bucket([]byte("journal"))
+			if journal == nil {
+				return fmt.Errorf("journal bucket not found")
+			}
+			if err := journal.Delete(lastKey); err != nil {
+				return err
+			}
+
+			// Append rollback to auditlog
+			rollbackEntry := internal.JournalEntry{
+				Action:    internal.ActionRollback,
+				Alias:     lastEntry.Alias,
+				Timestamp: time.Now(),
+				Data:      lastEntry.Data,
+			}
+			return internal.WriteAuditLogEntry(db, rollbackEntry)
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("↩️ Rolled back '%s'\n", lastEntry.Alias)
+		return nil
+	},
+}
+
+var kvAuditCmd = &cobra.Command{
+	Use:   "audit",
+	Short: "Display all actions from the immutable auditlog",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		dbPath := internal.GetDBFilePath(base)
+		db, err := bbolt.Open(dbPath, 0600, nil)
+		if err != nil {
+			return fmt.Errorf("failed to open db: %w", err)
+		}
+		defer db.Close()
+
+		var entries []internal.JournalEntry
+		err = db.View(func(tx *bbolt.Tx) error {
+			bucket := tx.Bucket([]byte("auditlog"))
+			if bucket == nil {
+				fmt.Println("No audit log entries found.")
+				return nil
+			}
+			return bucket.ForEach(func(k, v []byte) error {
+				var entry internal.JournalEntry
+				if err := json.Unmarshal(v, &entry); err != nil {
+					return err
+				}
+				entries = append(entries, entry)
+				return nil
+			})
+		})
+		if err != nil {
+			return err
+		}
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].Timestamp.After(entries[j].Timestamp)
+		})
+		fmt.Println("🧾 Audit Log:")
+		for _, e := range entries {
+			fmt.Printf("- [%s] %s %s\n", e.Timestamp.Format("2006-01-02 15:04:05"), e.Action, e.Alias)
+		}
+		return nil
+	},
+}
+
 func GetKVAccountsCommand() *cobra.Command {
 	kvaccountsCmd.PersistentFlags().String("base", ".", "Base path to flatgas repo")
 	kvCreateCmd.Flags().StringVar(&kvAlias, "alias", "", "Alias for the new account")
@@ -182,5 +295,7 @@ func GetKVAccountsCommand() *cobra.Command {
 	kvaccountsCmd.AddCommand(kvCreateCmd)
 	kvaccountsCmd.AddCommand(kvListCmd)
 	kvaccountsCmd.AddCommand(kvHistoryCmd)
+	kvaccountsCmd.AddCommand(kvRollbackCmd)
+	kvaccountsCmd.AddCommand(kvAuditCmd)
 	return kvaccountsCmd
 }
