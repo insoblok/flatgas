@@ -97,6 +97,7 @@ func WriteAuditLogEntry(db *bbolt.DB, entry JournalEntry) error {
 		return b.Put(key, data)
 	})
 }
+
 func WriteTxAuditLogEntry(tx *bbolt.Tx, entry JournalEntry) error {
 	audit := tx.Bucket([]byte("auditlog"))
 	if audit == nil {
@@ -113,6 +114,24 @@ func WriteTxAuditLogEntry(tx *bbolt.Tx, entry JournalEntry) error {
 		return fmt.Errorf("marshal buket entry: %w", err)
 	}
 	return audit.Put(key, data)
+}
+
+func WriteTxHistoryLogEntry(tx *bbolt.Tx, entry JournalEntry) error {
+	journal := tx.Bucket([]byte("journal"))
+	if journal == nil {
+		var err error
+		journal, err = tx.CreateBucket([]byte("journal"))
+		if err != nil {
+			return fmt.Errorf("create journal bucket: %w", err)
+		}
+	}
+
+	key := []byte(entry.Timestamp.Format(time.RFC3339Nano))
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshal buket entry: %w", err)
+	}
+	return journal.Put(key, data)
 }
 
 func ReadAlias(db *bbolt.DB, alias string) (*AliasRecord, error) {
@@ -182,6 +201,11 @@ func WithUpdateAlias(db *bbolt.DB, alias string, fn func(*AliasRecord) error) er
 			Timestamp: time.Now(),
 			Data:      &record,
 		}
+		err = WriteTxHistoryLogEntry(tx, entry)
+		if err != nil {
+			return fmt.Errorf("write journal entry: %w", err)
+		}
+
 		return WriteTxAuditLogEntry(tx, entry)
 	})
 }
