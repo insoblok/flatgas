@@ -81,6 +81,15 @@ func GetRollbackCmd() *cobra.Command {
 						return fmt.Errorf("failed to restore alias '%s': %w", lastEntry.Alias, err)
 					}
 					fmt.Println("✅ Alias restored in DB.")
+				case internal.ActionUpdateMeta:
+					data, err := json.Marshal(lastEntry.Data)
+					if err != nil {
+						return fmt.Errorf("failed to marshal updated alias: %w", err)
+					}
+					if err := aliases.Put([]byte(lastEntry.Alias), data); err != nil {
+						return fmt.Errorf("failed to restore alias during rollback: %w", err)
+					}
+
 				default:
 					return fmt.Errorf("rollback not supported for action: %s", lastEntry.Action)
 				}

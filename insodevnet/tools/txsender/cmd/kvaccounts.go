@@ -23,5 +23,6 @@ func GetKVAccountsCommand() *cobra.Command {
 	kvaccountsCmd.AddCommand(kvaccounts.GetAuditCmd())
 	kvaccountsCmd.AddCommand(kvaccounts.GetDeleteCmd())
 	kvaccountsCmd.AddCommand(kvaccounts.GetExportCmd())
+	kvaccountsCmd.AddCommand(kvaccounts.GetMetadataCmd())
 	return kvaccountsCmd
 }

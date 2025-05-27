@@ -30,7 +30,7 @@ type AliasRecord struct {
 	Alias    Alias                  `json:"alias"`
 	Address  KvAddress              `json:"address"`
 	Keystore map[string]interface{} `json:"keystore"`
-	Metadata map[string]interface{} `json:"meta"`
+	Metadata map[string]string      `json:"meta"`
 	Created  time.Time              `json:"created"`
 	Updated  time.Time              `json:"updated"`
 }
@@ -113,4 +113,75 @@ func WriteTxAuditLogEntry(tx *bbolt.Tx, entry JournalEntry) error {
 		return fmt.Errorf("marshal buket entry: %w", err)
 	}
 	return audit.Put(key, data)
+}
+
+func ReadAlias(db *bbolt.DB, alias string) (*AliasRecord, error) {
+	var record AliasRecord
+
+	err := db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte("aliases"))
+		if bucket == nil {
+			return fmt.Errorf("aliases bucket not found")
+		}
+
+		data := bucket.Get([]byte(alias))
+		if data == nil {
+			return fmt.Errorf("alias '%s' not found", alias)
+		}
+
+		if err := json.Unmarshal(data, &record); err != nil {
+			return fmt.Errorf("failed to decode alias data: %w", err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+// WithUpdateAlias loads an alias, modifies it via fn, and saves it back.
+func WithUpdateAlias(db *bbolt.DB, alias string, fn func(*AliasRecord) error) error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		aliases := tx.Bucket([]byte("aliases"))
+		if aliases == nil {
+			return fmt.Errorf("aliases bucket not found")
+		}
+
+		data := aliases.Get([]byte(alias))
+		if data == nil {
+			return fmt.Errorf("alias not found: %s", alias)
+		}
+
+		var record AliasRecord
+		if err := json.Unmarshal(data, &record); err != nil {
+			return fmt.Errorf("unmarshal alias record: %w", err)
+		}
+
+		// Modify in-place
+		if err := fn(&record); err != nil {
+			return err
+		}
+
+		record.Updated = time.Now()
+
+		newData, err := json.Marshal(record)
+		if err != nil {
+			return fmt.Errorf("marshal updated record: %w", err)
+		}
+
+		if err := aliases.Put([]byte(alias), newData); err != nil {
+			return fmt.Errorf("update alias: %w", err)
+		}
+
+		// Record journal entry
+		entry := JournalEntry{
+			Action:    ActionUpdateMeta,
+			Alias:     Alias(alias),
+			Timestamp: time.Now(),
+			Data:      &record,
+		}
+		return WriteTxAuditLogEntry(tx, entry)
+	})
 }
