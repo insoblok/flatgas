@@ -21,6 +21,7 @@ func main() {
 		cmd.GetFundCommand(),
 		cmd.GetTxCommand(),
 		cmd.GetNodeCommand(),
+		cmd.GetKVAccountsCommand(),
 	)
 	fmt.Println("🚀 txsender CLI starting...")
 
