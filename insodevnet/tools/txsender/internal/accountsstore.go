@@ -209,3 +209,48 @@ func WithUpdateAlias(db *bbolt.DB, alias string, fn func(*AliasRecord) error) er
 		return WriteTxAuditLogEntry(tx, entry)
 	})
 }
+
+// SaveAliasRecord saves an AliasRecord under the given alias,
+// and appends the action to both journal and auditlog buckets.
+func SaveAliasRecord(tx *bbolt.Tx, alias string, record AliasRecord, action Action) error {
+	// --- Aliases bucket ---
+	aliases := tx.Bucket([]byte("aliases"))
+	if aliases == nil {
+		return fmt.Errorf("aliases bucket not found")
+	}
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("failed to marshal alias record: %w", err)
+	}
+	if err := aliases.Put([]byte(alias), data); err != nil {
+		return fmt.Errorf("failed to store alias record: %w", err)
+	}
+
+	// --- Journal bucket ---
+	journal := tx.Bucket([]byte("journal"))
+	if journal == nil {
+		j, err := tx.CreateBucketIfNotExists([]byte("journal"))
+		if err != nil {
+			return fmt.Errorf("failed to create journal bucket: %w", err)
+		}
+		journal = j
+	}
+
+	journalEntry := JournalEntry{
+		Action:    action,
+		Alias:     Alias(alias),
+		Timestamp: time.Now(),
+		Data:      &record,
+	}
+
+	if err := WriteTxHistoryLogEntry(tx, journalEntry); err != nil {
+		return fmt.Errorf("failed to write hisotry log: %w", err)
+	}
+
+	// --- Audit log bucket ---
+	if err := WriteTxAuditLogEntry(tx, journalEntry); err != nil {
+		return fmt.Errorf("failed to write audit log: %w", err)
+	}
+
+	return nil
+}
