@@ -181,12 +181,14 @@ var kvRollbackCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		base, _ := cmd.Flags().GetString("base")
 		dbPath := internal.GetDBFilePath(base)
+		fmt.Println("🔧 Opening DB at:", dbPath)
 		db, err := bbolt.Open(dbPath, 0600, nil)
 		if err != nil {
 			return fmt.Errorf("failed to open db: %w", err)
 		}
 		defer db.Close()
 
+		fmt.Println("🔍 Reading latest journal entry...")
 		var lastKey []byte
 		var lastEntry internal.JournalEntry
 		err = db.View(func(tx *bbolt.Tx) error {
@@ -199,6 +201,7 @@ var kvRollbackCmd = &cobra.Command{
 			if k == nil {
 				return fmt.Errorf("journal is empty")
 			}
+			fmt.Printf("🧾 Selected rollback entry key: %s\n", k)
 			lastKey = k
 			return json.Unmarshal(v, &lastEntry)
 		})
@@ -206,12 +209,14 @@ var kvRollbackCmd = &cobra.Command{
 			return err
 		}
 
+		fmt.Printf("🔄 Entry to rollback: [%s] %s\n", lastEntry.Timestamp.Format("2006-01-02 15:04:05"), lastEntry.Alias)
+
 		if lastEntry.Action != internal.ActionCreate {
 			return fmt.Errorf("rollback for '%s' not implemented", lastEntry.Action)
 		}
 
+		fmt.Println("⚙️ Executing rollback...")
 		err = db.Update(func(tx *bbolt.Tx) error {
-			// Remove alias
 			aliases := tx.Bucket([]byte("aliases"))
 			if aliases == nil {
 				return fmt.Errorf("aliases bucket not found")
@@ -220,7 +225,6 @@ var kvRollbackCmd = &cobra.Command{
 				return err
 			}
 
-			// Remove from journal
 			journal := tx.Bucket([]byte("journal"))
 			if journal == nil {
 				return fmt.Errorf("journal bucket not found")
@@ -229,14 +233,26 @@ var kvRollbackCmd = &cobra.Command{
 				return err
 			}
 
-			// Append rollback to auditlog
 			rollbackEntry := internal.JournalEntry{
 				Action:    internal.ActionRollback,
 				Alias:     lastEntry.Alias,
 				Timestamp: time.Now(),
 				Data:      lastEntry.Data,
 			}
-			return internal.WriteAuditLogEntry(db, rollbackEntry)
+			audit := tx.Bucket([]byte("auditlog"))
+			if audit == nil {
+				var err error
+				audit, err = tx.CreateBucket([]byte("auditlog"))
+				if err != nil {
+					return fmt.Errorf("create auditlog bucket: %w", err)
+				}
+			}
+			key := []byte(rollbackEntry.Timestamp.Format(time.RFC3339Nano))
+			data, err := json.Marshal(rollbackEntry)
+			if err != nil {
+				return fmt.Errorf("marshal rollback entry: %w", err)
+			}
+			return audit.Put(key, data)
 		})
 		if err != nil {
 			return err
