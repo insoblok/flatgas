@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -81,8 +82,50 @@ var kvCreateCmd = &cobra.Command{
 			return fmt.Errorf("failed to write alias to db: %w", err)
 		}
 
+		entry := internal.JournalEntry{
+			Action:    internal.ActionCreate,
+			Alias:     record.Alias,
+			Timestamp: time.Now(),
+			Data:      &record,
+		}
+		if err := internal.WriteJournalEntry(db, entry); err != nil {
+			log.Fatalf("failed to write journal entry: %v", err)
+		}
+
 		fmt.Printf("✅ Created alias '%s' → %s\n", record.Alias, record.Address)
 		return nil
+	},
+}
+
+var kvListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all aliases stored in the kvstore",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		base, _ := cmd.Flags().GetString("base")
+		dbPath := internal.GetDBFilePath(base)
+		db, err := bbolt.Open(dbPath, 0600, nil)
+		if err != nil {
+			return fmt.Errorf("failed to open db: %w", err)
+		}
+		defer db.Close()
+
+		return db.View(func(tx *bbolt.Tx) error {
+			bucket := tx.Bucket([]byte("aliases"))
+			if bucket == nil {
+				fmt.Println("No aliases found.")
+				return nil
+			}
+
+			fmt.Println("📁 Known aliases:")
+			return bucket.ForEach(func(k, v []byte) error {
+				var record internal.AliasRecord
+				if err := json.Unmarshal(v, &record); err != nil {
+					return err
+				}
+				fmt.Printf("  %s => %s\n", record.Alias, record.Address)
+				return nil
+			})
+		})
 	},
 }
 
@@ -91,5 +134,6 @@ func GetKVAccountsCommand() *cobra.Command {
 	kvCreateCmd.Flags().StringVar(&kvAlias, "alias", "", "Alias for the new account")
 	kvCreateCmd.Flags().StringVar(&kvPassword, "password", "", "Password to encrypt key")
 	kvaccountsCmd.AddCommand(kvCreateCmd)
+	kvaccountsCmd.AddCommand(kvListCmd)
 	return kvaccountsCmd
 }
