@@ -73,6 +73,14 @@ func WriteJournalEntry(db *bbolt.DB, entry JournalEntry) error {
 		return b.Put(key, data)
 	})
 }
+func WriteJournalEntryWithBucket(b *bbolt.Bucket, entry JournalEntry) error {
+	key := []byte(entry.Timestamp.Format(time.RFC3339Nano))
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshal journal entry: %w", err)
+	}
+	return b.Put(key, data)
+}
 
 // WriteAuditLogEntry appends a new audit log entry to the auditlog bucket using timestamp-based key
 func WriteAuditLogEntry(db *bbolt.DB, entry JournalEntry) error {
@@ -88,4 +96,21 @@ func WriteAuditLogEntry(db *bbolt.DB, entry JournalEntry) error {
 		}
 		return b.Put(key, data)
 	})
+}
+func WriteTxAuditLogEntry(tx *bbolt.Tx, entry JournalEntry) error {
+	audit := tx.Bucket([]byte("auditlog"))
+	if audit == nil {
+		var err error
+		audit, err = tx.CreateBucket([]byte("auditlog"))
+		if err != nil {
+			return fmt.Errorf("create auditlog bucket: %w", err)
+		}
+	}
+
+	key := []byte(entry.Timestamp.Format(time.RFC3339Nano))
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshal buket entry: %w", err)
+	}
+	return audit.Put(key, data)
 }

@@ -75,12 +75,14 @@ var kvCreateCmd = &cobra.Command{
 			return fmt.Errorf("failed to write alias to db: %w", err)
 		}
 
+		fmt.Println("📝 Preparing create audit log entry...")
 		entry := internal.JournalEntry{
 			Action:    internal.ActionCreate,
 			Alias:     record.Alias,
 			Timestamp: time.Now(),
 			Data:      &record,
 		}
+
 		if err := internal.WriteJournalEntry(db, entry); err != nil {
 			log.Fatalf("failed to write journal entry: %v", err)
 		}
