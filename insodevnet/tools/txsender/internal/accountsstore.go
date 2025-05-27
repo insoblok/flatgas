@@ -1,6 +1,9 @@
 package internal
 
-import "time"
+import (
+	"path/filepath"
+	"time"
+)
 
 type AliasRecord struct {
 	Alias    string                 `json:"alias"`
@@ -9,4 +12,8 @@ type AliasRecord struct {
 	Metadata map[string]interface{} `json:"meta"`
 	Created  time.Time              `json:"created"`
 	Updated  time.Time              `json:"updated"`
+}
+
+func GetDBFilePath(base string) string {
+	return filepath.Join(base, "wallet", "kvstore", "accounts.db")
 }

@@ -8,6 +8,7 @@ require (
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
+	go.etcd.io/bbolt v1.4.0
 )
 
 require (
