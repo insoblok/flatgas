@@ -22,5 +22,6 @@ func GetKVAccountsCommand() *cobra.Command {
 	kvaccountsCmd.AddCommand(kvaccounts.GetRollbackCmd())
 	kvaccountsCmd.AddCommand(kvaccounts.GetAuditCmd())
 	kvaccountsCmd.AddCommand(kvaccounts.GetDeleteCmd())
+	kvaccountsCmd.AddCommand(kvaccounts.GetExportCmd())
 	return kvaccountsCmd
 }
