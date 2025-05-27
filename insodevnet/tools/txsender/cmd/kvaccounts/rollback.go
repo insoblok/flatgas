@@ -11,13 +11,13 @@ import (
 )
 
 func GetRollbackCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "rollback",
-		Short: "Rollback the most recent change to aliases",
+		Short: "Rollback the latest change (create/delete/update-meta) to aliases",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			base, _ := cmd.Flags().GetString("base")
 			dbPath := internal.GetDBFilePath(base)
-			fmt.Printf("\U0001f527 Opening DB at: %s\n", dbPath)
+			fmt.Printf("🔧 Opening DB at: %s\n", dbPath)
 
 			db, err := bbolt.Open(dbPath, 0600, nil)
 			if err != nil {
@@ -25,32 +25,29 @@ func GetRollbackCmd() *cobra.Command {
 			}
 			defer db.Close()
 
-			fmt.Println("\U0001f50d Reading latest journal entry...")
-
+			fmt.Println("🔍 Reading latest journal entry...")
 			var lastKey []byte
 			var lastEntry internal.JournalEntry
 
 			err = db.View(func(tx *bbolt.Tx) error {
-				bucket := tx.Bucket([]byte("journal"))
-				if bucket == nil {
+				journal := tx.Bucket([]byte("journal"))
+				if journal == nil {
 					return fmt.Errorf("journal bucket not found")
 				}
-
-				c := bucket.Cursor()
+				c := journal.Cursor()
 				k, v := c.Last()
 				if k == nil {
-					return fmt.Errorf("no journal entries to rollback")
+					return fmt.Errorf("no journal entries found")
 				}
 				lastKey = k
 				return json.Unmarshal(v, &lastEntry)
 			})
 			if err != nil {
-				fmt.Printf("❌ Error loading journal: %v\n", err)
 				return err
 			}
 
-			fmt.Printf("\U0001f4be Selected rollback entry key: %s\n", lastKey)
-			fmt.Printf("\U0001f504 Entry to rollback: [%s] %s (%s)\n", lastEntry.Timestamp.Format("2006-01-02 15:04:05"), lastEntry.Alias, lastEntry.Action)
+			fmt.Printf("💾 Selected rollback entry key: %s\n", string(lastKey))
+			fmt.Printf("🔄 Entry to rollback: [%s] %s (%s)\n", lastEntry.Timestamp.Format("2006-01-02 15:04:05"), lastEntry.Alias, lastEntry.Action)
 			fmt.Println("⚙️ Executing rollback...")
 
 			err = db.Update(func(tx *bbolt.Tx) error {
@@ -70,14 +67,11 @@ func GetRollbackCmd() *cobra.Command {
 					fmt.Println("🔧 Marshalling alias record...")
 					data, err := json.Marshal(lastEntry.Data)
 					if err != nil {
-						fmt.Printf("❌ Marshal failed: %v\n", err)
 						return fmt.Errorf("failed to marshal restored alias: %w", err)
 					}
 					fmt.Println("✅ Marshal complete. Proceeding to PUT...")
-
 					fmt.Println("🔧 Writing alias record to DB...")
 					if err := aliases.Put([]byte(lastEntry.Alias), data); err != nil {
-						fmt.Printf("❌ Put failed: %v\n", err)
 						return fmt.Errorf("failed to restore alias '%s': %w", lastEntry.Alias, err)
 					}
 					fmt.Println("✅ Alias restored in DB.")
@@ -109,10 +103,14 @@ func GetRollbackCmd() *cobra.Command {
 					Timestamp: time.Now(),
 					Data:      lastEntry.Data,
 				}
-				return internal.WriteTxAuditLogEntry(tx, rollbackEntry)
+				fmt.Println("📋 Writing audit log entry...")
+				if err := internal.WriteTxAuditLogEntry(tx, rollbackEntry); err != nil {
+					return fmt.Errorf("failed to write audit log: %w", err)
+				}
+				fmt.Println("✅ Audit log entry written.")
+				return nil
 			})
 			if err != nil {
-				fmt.Printf("❌ Rollback failed: %v\n", err)
 				return err
 			}
 
@@ -120,6 +118,4 @@ func GetRollbackCmd() *cobra.Command {
 			return nil
 		},
 	}
-
-	return cmd
 }
