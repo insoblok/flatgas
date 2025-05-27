@@ -52,8 +52,8 @@ var kvCreateCmd = &cobra.Command{
 		}
 
 		record := internal.AliasRecord{
-			Alias:    kvAlias,
-			Address:  acct.Address.Hex(),
+			Alias:    internal.Alias(kvAlias),
+			Address:  internal.KvAddress(acct.Address.Hex()),
 			Keystore: keyRaw,
 			Metadata: map[string]interface{}{"tags": []string{"created"}},
 			Created:  time.Now(),
