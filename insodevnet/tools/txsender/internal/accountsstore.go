@@ -3,12 +3,12 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"time"
-
 	"go.etcd.io/bbolt"
+	"os"
+	"path/filepath"
+	"time"
 )
 
-type Action string
 type Alias string
 type KvAddress string
 
@@ -32,13 +32,6 @@ type AliasRecord struct {
 	Created  time.Time              `json:"created"`
 	Updated  time.Time              `json:"updated"`
 }
-
-const (
-	ActionCreate     Action = "create"
-	ActionDelete     Action = "delete"
-	ActionUpdateMeta Action = "update-meta"
-	ActionRollback   Action = "rollback" // optional
-)
 
 type JournalEntry struct {
 	Action    Action       `json:"action"`
@@ -232,4 +225,21 @@ func SaveAliasRecord(tx *bbolt.Tx, alias string, record AliasRecord, action Acti
 	}
 
 	return nil
+}
+
+func GetDBFilePathForStore(base string, storeDir string, dbFile string) string {
+	dir := filepath.Join(base, "wallet", storeDir)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to create db directory: %v\n", err)
+		os.Exit(1)
+	}
+	return filepath.Join(dir, dbFile)
+}
+
+func GetAccountsDBFilePath(base string) string {
+	return GetDBFilePathForStore(base, "accounts", "accounts.db")
+}
+
+func GetConfigStoreFilePath(base string) string {
+	return GetDBFilePathForStore(base, "config", "config.db")
 }
