@@ -33,19 +33,17 @@ type Record[V any] struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func PutRecord[K any, V any](
+func PutRecord[V any](
 	tx *bbolt.Tx,
-	key K,
+	key string,
 	value V,
 	schema StoreBuckets,
 	action Action,
-	keyEncode func(K) []byte,
 ) error {
-	keyBytes := keyEncode(key)
 
 	record := Record[V]{
 		Action:    action,
-		Key:       string(keyBytes),
+		Key:       key,
 		Value:     value,
 		Timestamp: time.Now(),
 	}
@@ -60,7 +58,7 @@ func PutRecord[K any, V any](
 	if current == nil {
 		return fmt.Errorf("current bucket not found: %s", schema.Current)
 	}
-	if err := current.Put(keyBytes, recordBytes); err != nil {
+	if err := current.Put([]byte(key), recordBytes); err != nil {
 		return fmt.Errorf("put in current bucket: %w", err)
 	}
 
@@ -86,7 +84,7 @@ func PutRecord[K any, V any](
 	return nil
 }
 
-func EnumerateBucket[K any, V any](tx *bbolt.Tx, bucketName Bucket) ([]Record[V], error) {
+func EnumerateBucket[V any](tx *bbolt.Tx, bucketName Bucket) ([]Record[V], error) {
 	bucket := tx.Bucket([]byte(bucketName))
 	if bucket == nil {
 		return nil, fmt.Errorf("bucket %s not found", bucketName)

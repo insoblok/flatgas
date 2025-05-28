@@ -31,14 +31,14 @@ func TestPutAndEnumerate(t *testing.T) {
 	}
 
 	err = db.Update(func(tx *bbolt.Tx) error {
-		return PutRecord[string, testValue](tx, "test-key", testValue{Message: "Hello"}, buckets, ActionCreate, keyEncode)
+		return PutRecord[testValue](tx, "test-key", testValue{Message: "Hello"}, buckets, ActionCreate)
 	})
 	if err != nil {
 		t.Fatalf("failed to put record: %v", err)
 	}
 
 	err = db.View(func(tx *bbolt.Tx) error {
-		records, err := EnumerateBucket[string, testValue](tx, buckets.Current)
+		records, err := EnumerateBucket[testValue](tx, buckets.Current)
 		if err != nil {
 			t.Fatalf("failed to enumerate current bucket: %v", err)
 		}
