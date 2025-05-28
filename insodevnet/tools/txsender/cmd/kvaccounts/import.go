@@ -18,7 +18,7 @@ func GetImportCmd() *cobra.Command {
 		Short: "Import a keyfile into the kvaccounts store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			base, _ := cmd.Flags().GetString("base")
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 
 			fmt.Printf("📁 Importing keyfile for alias '%s'...", alias)
 			keyJSON, err := ioutil.ReadFile(keyfilePath)

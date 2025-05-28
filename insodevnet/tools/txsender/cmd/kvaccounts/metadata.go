@@ -33,7 +33,7 @@ func getMetaAddCmd() *cobra.Command {
 			if kvAlias == "" || kvMetaKey == "" || kvMetaValue == "" {
 				return fmt.Errorf("alias, key, and value must be provided")
 			}
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 			fmt.Printf("📁 DB: %s\n", dbPath)
 			return updateMetadata(dbPath, kvAlias, kvMetaKey, kvMetaValue, "add")
 		},
@@ -53,7 +53,7 @@ func getMetaDeleteCmd() *cobra.Command {
 			if kvAlias == "" || kvMetaKey == "" {
 				return fmt.Errorf("alias and key must be provided")
 			}
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 			return updateMetadata(dbPath, kvAlias, kvMetaKey, "", "delete")
 		},
 	}
@@ -71,7 +71,7 @@ func getMetaListCmd() *cobra.Command {
 			if kvAlias == "" {
 				return fmt.Errorf("alias must be provided")
 			}
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 			db, err := bbolt.Open(dbPath, 0600, nil)
 			if err != nil {
 				return fmt.Errorf("failed to open db: %w", err)

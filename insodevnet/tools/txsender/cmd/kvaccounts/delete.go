@@ -22,7 +22,7 @@ func GetDeleteCmd() *cobra.Command {
 				return fmt.Errorf("--alias is required")
 			}
 
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 			db, err := bbolt.Open(dbPath, 0600, nil)
 			if err != nil {
 				return fmt.Errorf("failed to open db: %w", err)

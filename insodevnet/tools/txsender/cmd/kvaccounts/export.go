@@ -21,7 +21,7 @@ func GetExportCmd() *cobra.Command {
 		Short: "Export a decrypted keyfile for an alias",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			base, _ := cmd.Flags().GetString("base")
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 			db, err := bbolt.Open(dbPath, 0600, nil)
 			if err != nil {
 				return fmt.Errorf("failed to open DB: %w", err)

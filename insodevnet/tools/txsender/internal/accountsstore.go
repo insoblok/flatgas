@@ -3,8 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -33,15 +31,6 @@ type AliasRecord struct {
 	Metadata map[string]string      `json:"meta"`
 	Created  time.Time              `json:"created"`
 	Updated  time.Time              `json:"updated"`
-}
-
-func GetDBFilePath(base string) string {
-	dir := filepath.Join(base, "wallet", "kvstore")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to create db directory: %v\n", err)
-		os.Exit(1)
-	}
-	return filepath.Join(dir, "accounts.db")
 }
 
 const (
@@ -73,16 +62,7 @@ func WriteJournalEntry(db *bbolt.DB, entry JournalEntry) error {
 		return b.Put(key, data)
 	})
 }
-func WriteJournalEntryWithBucket(b *bbolt.Bucket, entry JournalEntry) error {
-	key := []byte(entry.Timestamp.Format(time.RFC3339Nano))
-	data, err := json.Marshal(entry)
-	if err != nil {
-		return fmt.Errorf("marshal journal entry: %w", err)
-	}
-	return b.Put(key, data)
-}
 
-// WriteAuditLogEntry appends a new audit log entry to the auditlog bucket using timestamp-based key
 func WriteAuditLogEntry(db *bbolt.DB, entry JournalEntry) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("auditlog"))
@@ -160,7 +140,6 @@ func ReadAlias(db *bbolt.DB, alias string) (*AliasRecord, error) {
 	return &record, nil
 }
 
-// WithUpdateAlias loads an alias, modifies it via fn, and saves it back.
 func WithUpdateAlias(db *bbolt.DB, alias string, fn func(*AliasRecord) error) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		aliases := tx.Bucket([]byte("aliases"))

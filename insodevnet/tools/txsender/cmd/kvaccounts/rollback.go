@@ -16,7 +16,7 @@ func GetRollbackCmd() *cobra.Command {
 		Short: "Rollback the latest change (create/delete/update-meta) to aliases",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			base, _ := cmd.Flags().GetString("base")
-			dbPath := internal.GetDBFilePath(base)
+			dbPath := internal.GetAccountsDBFilePath(base)
 			fmt.Printf("🔧 Opening DB at: %s\n", dbPath)
 
 			db, err := bbolt.Open(dbPath, 0600, nil)
