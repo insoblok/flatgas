@@ -54,18 +54,18 @@ func PutRecord[V any](
 	}
 
 	// Current bucket
-	current := tx.Bucket([]byte(schema.Current))
-	if current == nil {
-		return fmt.Errorf("current bucket not found: %s", schema.Current)
+	current, err := tx.CreateBucketIfNotExists([]byte(schema.Current))
+	if err != nil {
+		return fmt.Errorf("current bucket creation failed: %w", err)
 	}
 	if err := current.Put([]byte(key), recordBytes); err != nil {
 		return fmt.Errorf("put in current bucket: %w", err)
 	}
 
 	// Journal (history) bucket
-	journal := tx.Bucket([]byte(schema.Journal))
-	if journal == nil {
-		return fmt.Errorf("journal bucket not found: %s", schema.Journal)
+	journal, err := tx.CreateBucketIfNotExists([]byte(schema.Journal))
+	if err != nil {
+		return fmt.Errorf("journal bucket creation failed: %w", err)
 	}
 	keyBytesTS := []byte(record.Timestamp.Format(time.RFC3339Nano))
 	if err := journal.Put(keyBytesTS, recordBytes); err != nil {
@@ -73,9 +73,9 @@ func PutRecord[V any](
 	}
 
 	// Audit log bucket
-	audit := tx.Bucket([]byte(schema.Audit))
-	if audit == nil {
-		return fmt.Errorf("audit bucket not found: %s", schema.Audit)
+	audit, err := tx.CreateBucketIfNotExists([]byte(schema.Audit))
+	if err != nil {
+		return fmt.Errorf("audit bucket creation failed: %w", err)
 	}
 	if err := audit.Put(keyBytesTS, recordBytes); err != nil {
 		return fmt.Errorf("put in audit bucket: %w", err)
