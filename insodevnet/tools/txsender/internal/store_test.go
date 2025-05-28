@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"go.etcd.io/bbolt"
 	"os"
 	"path/filepath"
@@ -50,14 +49,5 @@ func TestPutAndEnumerate(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("view transaction failed: %v", err)
-	}
-}
-
-func keyEncode[K any](key K) ([]byte, error) {
-	switch k := any(key).(type) {
-	case string:
-		return []byte(k), nil
-	default:
-		return nil, fmt.Errorf("unsupported key type")
 	}
 }
