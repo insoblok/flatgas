@@ -121,39 +121,58 @@ func UpdateRecord[V any](
 	value V,
 	schema StoreBuckets,
 ) error {
-
 	buckets, err := getBuckets(tx, schema, false)
 	if err != nil {
 		return fmt.Errorf("Buckets failed: %w", err)
 	}
 
-	if buckets.Current.Get([]byte(key)) == nil {
+	original := buckets.Current.Get([]byte(key))
+	if original == nil {
 		return fmt.Errorf("key '%s' does not exist", key)
 	}
 
-	record := Record[V]{
+	// 🧠 Capture pre-update record
+	var prev Record[V]
+	if err := json.Unmarshal(original, &prev); err != nil {
+		return fmt.Errorf("unmarshal current value: %w", err)
+	}
+
+	timestamp := time.Now()
+
+	// 🔁 Save the old value into journal (so rollback can restore it)
+	journalEntry := Record[V]{
+		Action:    ActionUpdate,
+		Key:       key,
+		Value:     prev.Value,
+		Timestamp: timestamp,
+	}
+	journalBytes, err := json.Marshal(journalEntry)
+	if err != nil {
+		return fmt.Errorf("marshal journal entry: %w", err)
+	}
+	keyBytesTS := []byte(timestamp.Format(time.RFC3339Nano))
+	if err = buckets.Journal.Put(keyBytesTS, journalBytes); err != nil {
+		return fmt.Errorf("put in journal: %w", err)
+	}
+
+	// ✅ Write updated value into current
+	newRecord := Record[V]{
 		Action:    ActionUpdate,
 		Key:       key,
 		Value:     value,
-		Timestamp: time.Now(),
+		Timestamp: timestamp,
 	}
-
-	recordBytes, err := json.Marshal(record)
+	currentBytes, err := json.Marshal(newRecord)
 	if err != nil {
-		return fmt.Errorf("marshal record: %w", err)
+		return fmt.Errorf("marshal updated record: %w", err)
 	}
-
-	if err = buckets.Current.Put([]byte(key), recordBytes); err != nil {
+	if err = buckets.Current.Put([]byte(key), currentBytes); err != nil {
 		return fmt.Errorf("put in current bucket: %w", err)
 	}
 
-	keyBytesTS := []byte(record.Timestamp.Format(time.RFC3339Nano))
-	if err = buckets.Journal.Put(keyBytesTS, recordBytes); err != nil {
-		return fmt.Errorf("put in journal bucket: %w", err)
-	}
-
-	if err = buckets.Audit.Put(keyBytesTS, recordBytes); err != nil {
-		return fmt.Errorf("put in audit bucket: %w", err)
+	// 📝 Always log new state to audit
+	if err = buckets.Audit.Put(keyBytesTS, currentBytes); err != nil {
+		return fmt.Errorf("put in audit: %w", err)
 	}
 
 	return nil
