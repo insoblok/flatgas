@@ -9,7 +9,6 @@ import (
 )
 
 type Action string
-
 type Bucket string
 
 const (
@@ -31,6 +30,110 @@ type Record[V any] struct {
 	Key       string    `json:"key"`
 	Value     V         `json:"value"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+func CreateRecord[V any](
+	tx *bbolt.Tx,
+	key string,
+	value V,
+	schema StoreBuckets,
+) error {
+
+	current, err := tx.CreateBucketIfNotExists([]byte(schema.Current))
+	if err != nil {
+		return fmt.Errorf("current bucket creation failed: %w", err)
+	}
+
+	if current.Get([]byte(key)) != nil {
+		return fmt.Errorf("key '%s' already exists", key)
+	}
+
+	record := Record[V]{
+		Action:    ActionCreate,
+		Key:       key,
+		Value:     value,
+		Timestamp: time.Now(),
+	}
+
+	recordBytes, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal record: %w", err)
+	}
+
+	if err = current.Put([]byte(key), recordBytes); err != nil {
+		return fmt.Errorf("put in current bucket: %w", err)
+	}
+
+	journal, err := tx.CreateBucketIfNotExists([]byte(schema.Journal))
+	if err != nil {
+		return fmt.Errorf("journal bucket creation failed: %w", err)
+	}
+	keyBytesTS := []byte(record.Timestamp.Format(time.RFC3339Nano))
+	if err = journal.Put(keyBytesTS, recordBytes); err != nil {
+		return fmt.Errorf("put in journal bucket: %w", err)
+	}
+
+	audit, err := tx.CreateBucketIfNotExists([]byte(schema.Audit))
+	if err != nil {
+		return fmt.Errorf("audit bucket creation failed: %w", err)
+	}
+	if err = audit.Put(keyBytesTS, recordBytes); err != nil {
+		return fmt.Errorf("put in audit bucket: %w", err)
+	}
+
+	return nil
+}
+
+func UpdateRecord[V any](
+	tx *bbolt.Tx,
+	key string,
+	value V,
+	schema StoreBuckets,
+) error {
+
+	current, err := tx.CreateBucketIfNotExists([]byte(schema.Current))
+	if err != nil {
+		return fmt.Errorf("current bucket creation failed: %w", err)
+	}
+
+	if current.Get([]byte(key)) == nil {
+		return fmt.Errorf("key '%s' does not exist", key)
+	}
+
+	record := Record[V]{
+		Action:    ActionUpdate,
+		Key:       key,
+		Value:     value,
+		Timestamp: time.Now(),
+	}
+
+	recordBytes, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal record: %w", err)
+	}
+
+	if err = current.Put([]byte(key), recordBytes); err != nil {
+		return fmt.Errorf("put in current bucket: %w", err)
+	}
+
+	journal, err := tx.CreateBucketIfNotExists([]byte(schema.Journal))
+	if err != nil {
+		return fmt.Errorf("journal bucket creation failed: %w", err)
+	}
+	keyBytesTS := []byte(record.Timestamp.Format(time.RFC3339Nano))
+	if err = journal.Put(keyBytesTS, recordBytes); err != nil {
+		return fmt.Errorf("put in journal bucket: %w", err)
+	}
+
+	audit, err := tx.CreateBucketIfNotExists([]byte(schema.Audit))
+	if err != nil {
+		return fmt.Errorf("audit bucket creation failed: %w", err)
+	}
+	if err = audit.Put(keyBytesTS, recordBytes); err != nil {
+		return fmt.Errorf("put in audit bucket: %w", err)
+	}
+
+	return nil
 }
 
 func PutRecord[V any](
