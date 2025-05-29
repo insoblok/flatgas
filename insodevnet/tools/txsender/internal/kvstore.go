@@ -284,6 +284,48 @@ func RollbackRecord[V any](tx *bbolt.Tx, schema StoreBuckets) error {
 	return nil
 }
 
+func GetCurrentRecords[V any](tx *bbolt.Tx, schema StoreBuckets) ([]Record[V], error) {
+	return GetBucketRecords[V](tx, tx.Bucket([]byte(schema.Current)))
+}
+func GetJournalRecords[V any](tx *bbolt.Tx, schema StoreBuckets) ([]Record[V], error) {
+	return GetBucketRecords[V](tx, tx.Bucket([]byte(schema.Journal)))
+}
+func GetAuditRecords[V any](tx *bbolt.Tx, schema StoreBuckets) ([]Record[V], error) {
+	return GetBucketRecords[V](tx, tx.Bucket([]byte(schema.Audit)))
+}
+
+func GetBucketRecords[V any](tx *bbolt.Tx, bucket *bbolt.Bucket) ([]Record[V], error) {
+
+	var records []Record[V]
+	err := bucket.ForEach(func(_, v []byte) error {
+		var record Record[V]
+		if err := json.Unmarshal(v, &record); err != nil {
+			return fmt.Errorf("unmarshal record: %w", err)
+		}
+		records = append(records, record)
+		return nil
+	})
+	return records, err
+}
+
+func EnumerateBucket[V any](tx *bbolt.Tx, bucketName Bucket) ([]Record[V], error) {
+	bucket := tx.Bucket([]byte(bucketName))
+	if bucket == nil {
+		return nil, fmt.Errorf("bucket %s not found", bucketName)
+	}
+
+	var records []Record[V]
+	err := bucket.ForEach(func(_, v []byte) error {
+		var record Record[V]
+		if err := json.Unmarshal(v, &record); err != nil {
+			return fmt.Errorf("unmarshal record: %w", err)
+		}
+		records = append(records, record)
+		return nil
+	})
+	return records, err
+}
+
 func PutRecord[V any](
 	tx *bbolt.Tx,
 	key string,
@@ -338,22 +380,4 @@ func PutRecord[V any](
 	}
 
 	return nil
-}
-
-func EnumerateBucket[V any](tx *bbolt.Tx, bucketName Bucket) ([]Record[V], error) {
-	bucket := tx.Bucket([]byte(bucketName))
-	if bucket == nil {
-		return nil, fmt.Errorf("bucket %s not found", bucketName)
-	}
-
-	var records []Record[V]
-	err := bucket.ForEach(func(_, v []byte) error {
-		var record Record[V]
-		if err := json.Unmarshal(v, &record); err != nil {
-			return fmt.Errorf("unmarshal record: %w", err)
-		}
-		records = append(records, record)
-		return nil
-	})
-	return records, err
 }
