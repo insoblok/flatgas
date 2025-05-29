@@ -145,3 +145,57 @@ func TestCreateRecord(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "already exists")
 }
+
+func TestCreateRollback(t *testing.T) {
+	dbPath := "/tmp/test_flatgas_create_rollback.db"
+	defer os.Remove(dbPath)
+
+	db, err := bbolt.Open(dbPath, 0666, nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	type MyValue struct {
+		Data string
+	}
+
+	schema := StoreBuckets{
+		Current: "current",
+		Journal: "journal",
+		Audit:   "audit",
+	}
+
+	key := "item:1"
+	value := MyValue{Data: "alpha"}
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return CreateRecord(tx, key, value, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return RollbackRecord[MyValue](tx, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		rec, err := GetRecord[MyValue](tx, key, schema)
+		require.NoError(t, err)
+		require.Nil(t, rec)
+
+		current, err := GetCurrentRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, current, 0)
+
+		journal, err := GetJournalRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, journal, 0)
+
+		audit, err := GetAuditRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, audit, 2)
+		require.Equal(t, ActionCreate, audit[0].Action)
+		require.Equal(t, ActionRollback, audit[1].Action)
+
+		return nil
+	})
+}
