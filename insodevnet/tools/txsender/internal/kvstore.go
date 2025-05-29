@@ -32,6 +32,45 @@ type Record[V any] struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+type Buckets struct {
+	Current *bbolt.Bucket
+	Journal *bbolt.Bucket
+	Audit   *bbolt.Bucket
+}
+
+func getBuckets(tx *bbolt.Tx, schema StoreBuckets, allowCreate bool) (*Buckets, error) {
+	var get func(name Bucket) (*bbolt.Bucket, error)
+
+	if allowCreate {
+		get = func(name Bucket) (*bbolt.Bucket, error) {
+			return tx.CreateBucketIfNotExists([]byte(name))
+		}
+	} else {
+		get = func(name Bucket) (*bbolt.Bucket, error) {
+			bkt := tx.Bucket([]byte(name))
+			if bkt == nil {
+				return nil, fmt.Errorf("bucket '%s' not found", name)
+			}
+			return bkt, nil
+		}
+	}
+
+	current, err := get(schema.Current)
+	if err != nil {
+		return nil, err
+	}
+	journal, err := get(schema.Journal)
+	if err != nil {
+		return nil, err
+	}
+	audit, err := get(schema.Audit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Buckets{Current: current, Journal: journal, Audit: audit}, nil
+}
+
 func CreateRecord[V any](
 	tx *bbolt.Tx,
 	key string,
@@ -39,12 +78,12 @@ func CreateRecord[V any](
 	schema StoreBuckets,
 ) error {
 
-	current, err := tx.CreateBucketIfNotExists([]byte(schema.Current))
+	buckets, err := getBuckets(tx, schema, true)
 	if err != nil {
-		return fmt.Errorf("current bucket creation failed: %w", err)
+		return fmt.Errorf("Buckets failed: %w", err)
 	}
 
-	if current.Get([]byte(key)) != nil {
+	if buckets.Current.Get([]byte(key)) != nil {
 		return fmt.Errorf("key '%s' already exists", key)
 	}
 
@@ -60,24 +99,16 @@ func CreateRecord[V any](
 		return fmt.Errorf("marshal record: %w", err)
 	}
 
-	if err = current.Put([]byte(key), recordBytes); err != nil {
+	if err = buckets.Current.Put([]byte(key), recordBytes); err != nil {
 		return fmt.Errorf("put in current bucket: %w", err)
 	}
 
-	journal, err := tx.CreateBucketIfNotExists([]byte(schema.Journal))
-	if err != nil {
-		return fmt.Errorf("journal bucket creation failed: %w", err)
-	}
 	keyBytesTS := []byte(record.Timestamp.Format(time.RFC3339Nano))
-	if err = journal.Put(keyBytesTS, recordBytes); err != nil {
+	if err = buckets.Journal.Put(keyBytesTS, recordBytes); err != nil {
 		return fmt.Errorf("put in journal bucket: %w", err)
 	}
 
-	audit, err := tx.CreateBucketIfNotExists([]byte(schema.Audit))
-	if err != nil {
-		return fmt.Errorf("audit bucket creation failed: %w", err)
-	}
-	if err = audit.Put(keyBytesTS, recordBytes); err != nil {
+	if err = buckets.Audit.Put(keyBytesTS, recordBytes); err != nil {
 		return fmt.Errorf("put in audit bucket: %w", err)
 	}
 
@@ -91,12 +122,12 @@ func UpdateRecord[V any](
 	schema StoreBuckets,
 ) error {
 
-	current, err := tx.CreateBucketIfNotExists([]byte(schema.Current))
+	buckets, err := getBuckets(tx, schema, false)
 	if err != nil {
-		return fmt.Errorf("current bucket creation failed: %w", err)
+		return fmt.Errorf("Buckets failed: %w", err)
 	}
 
-	if current.Get([]byte(key)) == nil {
+	if buckets.Current.Get([]byte(key)) == nil {
 		return fmt.Errorf("key '%s' does not exist", key)
 	}
 
@@ -112,28 +143,81 @@ func UpdateRecord[V any](
 		return fmt.Errorf("marshal record: %w", err)
 	}
 
-	if err = current.Put([]byte(key), recordBytes); err != nil {
+	if err = buckets.Current.Put([]byte(key), recordBytes); err != nil {
 		return fmt.Errorf("put in current bucket: %w", err)
 	}
 
-	journal, err := tx.CreateBucketIfNotExists([]byte(schema.Journal))
-	if err != nil {
-		return fmt.Errorf("journal bucket creation failed: %w", err)
-	}
 	keyBytesTS := []byte(record.Timestamp.Format(time.RFC3339Nano))
-	if err = journal.Put(keyBytesTS, recordBytes); err != nil {
+	if err = buckets.Journal.Put(keyBytesTS, recordBytes); err != nil {
 		return fmt.Errorf("put in journal bucket: %w", err)
 	}
 
-	audit, err := tx.CreateBucketIfNotExists([]byte(schema.Audit))
-	if err != nil {
-		return fmt.Errorf("audit bucket creation failed: %w", err)
-	}
-	if err = audit.Put(keyBytesTS, recordBytes); err != nil {
+	if err = buckets.Audit.Put(keyBytesTS, recordBytes); err != nil {
 		return fmt.Errorf("put in audit bucket: %w", err)
 	}
 
 	return nil
+}
+
+func DeleteRecord[V any](tx *bbolt.Tx, key string, schema StoreBuckets) error {
+
+	buckets, err := getBuckets(tx, schema, false)
+	if err != nil {
+		return fmt.Errorf("Buckets failed: %w", err)
+	}
+
+	original := buckets.Current.Get([]byte(key))
+	if original == nil {
+		return fmt.Errorf("key '%s' not found for delete", key)
+	}
+
+	var value V
+	if err = json.Unmarshal(original, &value); err != nil {
+		return fmt.Errorf("unmarshal current value: %w", err)
+	}
+
+	timestamp := time.Now()
+	record := Record[V]{
+		Action:    ActionDelete,
+		Key:       key,
+		Value:     value,
+		Timestamp: timestamp,
+	}
+	recordBytes, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal delete record: %w", err)
+	}
+
+	if err = buckets.Current.Delete([]byte(key)); err != nil {
+		return fmt.Errorf("delete from current: %w", err)
+	}
+	keyTs := []byte(timestamp.Format(time.RFC3339Nano))
+	if err = buckets.Journal.Put(keyTs, recordBytes); err != nil {
+		return fmt.Errorf("write journal entry: %w", err)
+	}
+	if err = buckets.Audit.Put(keyTs, recordBytes); err != nil {
+		return fmt.Errorf("write audit entry: %w", err)
+	}
+
+	return nil
+}
+
+func GetRecord[V any](tx *bbolt.Tx, key string, schema StoreBuckets) (*Record[V], error) {
+	buckets, err := getBuckets(tx, schema, false)
+	if err != nil {
+		return nil, fmt.Errorf("Buckets failed: %w", err)
+	}
+
+	original := buckets.Current.Get([]byte(key))
+	if original == nil {
+		return nil, nil
+	}
+
+	var value Record[V]
+	if err = json.Unmarshal(original, &value); err != nil {
+		return nil, fmt.Errorf("unmarshal current value: %w", err)
+	}
+	return &value, nil
 }
 
 func PutRecord[V any](
@@ -281,60 +365,6 @@ func RollbackRecord[V any](tx *bbolt.Tx, buckets StoreBuckets) error {
 	}
 	if err := audit.Put(auditKey, data); err != nil {
 		return fmt.Errorf("write rollback audit entry: %w", err)
-	}
-
-	return nil
-}
-
-// DeleteRecord removes a record from the current bucket, logs the action in the journal and auditlog.
-func DeleteRecord[V any](tx *bbolt.Tx, key string, buckets StoreBuckets) error {
-	// Buckets
-	currentBkt, err := tx.CreateBucketIfNotExists([]byte(buckets.Current))
-	if err != nil {
-		return fmt.Errorf("create/get current bucket: %w", err)
-	}
-	journalBkt, err := tx.CreateBucketIfNotExists([]byte(buckets.Journal))
-	if err != nil {
-		return fmt.Errorf("create/get journal bucket: %w", err)
-	}
-	auditBkt, err := tx.CreateBucketIfNotExists([]byte(buckets.Audit))
-	if err != nil {
-		return fmt.Errorf("create/get audit bucket: %w", err)
-	}
-
-	// Retrieve current value
-	original := currentBkt.Get([]byte(key))
-	if original == nil {
-		return fmt.Errorf("key '%s' not found for delete", key)
-	}
-
-	var value V
-	if err := json.Unmarshal(original, &value); err != nil {
-		return fmt.Errorf("unmarshal current value: %w", err)
-	}
-
-	timestamp := time.Now()
-	record := Record[V]{
-		Action:    ActionDelete,
-		Key:       key,
-		Value:     value,
-		Timestamp: timestamp,
-	}
-	recordBytes, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("marshal delete record: %w", err)
-	}
-
-	// Apply operations
-	if err := currentBkt.Delete([]byte(key)); err != nil {
-		return fmt.Errorf("delete from current: %w", err)
-	}
-	journalKey := []byte(timestamp.Format(time.RFC3339Nano))
-	if err := journalBkt.Put(journalKey, recordBytes); err != nil {
-		return fmt.Errorf("write journal entry: %w", err)
-	}
-	if err := auditBkt.Put(journalKey, recordBytes); err != nil {
-		return fmt.Errorf("write audit entry: %w", err)
 	}
 
 	return nil
