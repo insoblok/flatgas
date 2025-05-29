@@ -5,6 +5,7 @@ import (
 	"go.etcd.io/bbolt"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestFlatgasStorageLifecycle(t *testing.T) {
@@ -83,4 +84,64 @@ func TestFlatgasStorageLifecycle(t *testing.T) {
 
 		return nil
 	})
+}
+
+func TestCreateRecord(t *testing.T) {
+	dbPath := "/tmp/test_flatgas_create.db"
+	defer os.Remove(dbPath)
+
+	db, err := bbolt.Open(dbPath, 0666, nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	type MyValue struct {
+		Data string
+	}
+
+	schema := StoreBuckets{
+		Current: "current",
+		Journal: "journal",
+		Audit:   "audit",
+	}
+
+	key := "user:123"
+	value := MyValue{Data: "hello"}
+
+	// Create
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return CreateRecord(tx, key, value, schema)
+	})
+	require.NoError(t, err)
+
+	// Validate record in Current
+	err = db.View(func(tx *bbolt.Tx) error {
+		rec, err := GetRecord[MyValue](tx, key, schema)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		require.Equal(t, ActionCreate, rec.Action)
+		require.Equal(t, key, rec.Key)
+		require.Equal(t, value.Data, rec.Value.Data)
+		require.WithinDuration(t, time.Now(), rec.Timestamp, time.Second)
+		return nil
+	})
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		audit, err := GetAuditRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, audit, 1)
+		require.Equal(t, ActionCreate, audit[0].Action)
+
+		journal, err := GetJournalRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, journal, 1)
+		require.Equal(t, ActionCreate, journal[0].Action)
+
+		return nil
+	})
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return CreateRecord(tx, key, value, schema)
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already exists")
 }
