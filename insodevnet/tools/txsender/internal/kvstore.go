@@ -58,6 +58,11 @@ func PutRecord[V any](
 	if err != nil {
 		return fmt.Errorf("current bucket creation failed: %w", err)
 	}
+
+	if action == ActionCreate && current.Get([]byte(key)) != nil {
+		return fmt.Errorf("key '%s' already exists", key)
+	}
+
 	if err := current.Put([]byte(key), recordBytes); err != nil {
 		return fmt.Errorf("put in current bucket: %w", err)
 	}
