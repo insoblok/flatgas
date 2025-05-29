@@ -9,12 +9,12 @@ import (
 )
 
 func TestFlatgasStorageLifecycle(t *testing.T) {
-	db, err := bbolt.Open("/tmp/test_flatgas.db", 0666, nil)
+	db, err := bbolt.Open("/tmp/test_db", 0666, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	defer os.Remove("/tmp/test_flatgas.db")
+	defer os.Remove("/tmp/test_db")
 
 	type MyValue struct {
 		Data string
@@ -195,6 +195,68 @@ func TestCreateRollback(t *testing.T) {
 		require.Len(t, audit, 2)
 		require.Equal(t, ActionCreate, audit[0].Action)
 		require.Equal(t, ActionRollback, audit[1].Action)
+
+		return nil
+	})
+}
+
+func TestUpdateRecord(t *testing.T) {
+	dbPath := "/tmp/test_flatgas_update.db"
+	defer os.Remove(dbPath)
+
+	db, err := bbolt.Open(dbPath, 0666, nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	type MyValue struct {
+		Data string
+	}
+
+	schema := StoreBuckets{
+		Current: "current",
+		Journal: "journal",
+		Audit:   "audit",
+	}
+
+	key := "item:42"
+	initial := MyValue{Data: "before"}
+	updated := MyValue{Data: "after"}
+
+	// ❌ Attempt update before create — should fail
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return UpdateRecord(tx, key, updated, schema)
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return CreateRecord(tx, key, initial, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return UpdateRecord(tx, key, updated, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		rec, err := GetRecord[MyValue](tx, key, schema)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		require.Equal(t, ActionUpdate, rec.Action)
+		require.Equal(t, updated.Data, rec.Value.Data)
+
+		journal, err := GetJournalRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, journal, 2)
+		require.Equal(t, ActionCreate, journal[0].Action)
+		require.Equal(t, ActionUpdate, journal[1].Action)
+
+		audit, err := GetAuditRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, audit, 2)
+		require.Equal(t, ActionCreate, audit[0].Action)
+		require.Equal(t, ActionUpdate, audit[1].Action)
 
 		return nil
 	})
