@@ -261,6 +261,66 @@ func TestUpdateRecord(t *testing.T) {
 	})
 }
 
+func TestUpdateRollback(t *testing.T) {
+	dbPath := "/tmp/test_flatgas_update_rollback.db"
+	defer os.Remove(dbPath)
+
+	db, err := bbolt.Open(dbPath, 0666, nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	type MyValue struct {
+		Data string
+	}
+
+	schema := StoreBuckets{
+		Current: "current",
+		Journal: "journal",
+		Audit:   "audit",
+	}
+
+	key := "config:key"
+	val1 := MyValue{Data: "v1"}
+	val2 := MyValue{Data: "v2"}
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return CreateRecord(tx, key, val1, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return UpdateRecord(tx, key, val2, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return RollbackRecord[MyValue](tx, schema)
+	})
+	require.NoError(t, err)
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		rec, err := GetRecord[MyValue](tx, key, schema)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		require.Equal(t, ActionCreate, rec.Action)
+		require.Equal(t, val1.Data, rec.Value.Data)
+
+		journal, err := GetJournalRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, journal, 1)
+		require.Equal(t, ActionCreate, journal[0].Action)
+
+		audit, err := GetAuditRecords[MyValue](tx, schema)
+		require.NoError(t, err)
+		require.Len(t, audit, 3)
+		require.Equal(t, ActionCreate, audit[0].Action)
+		require.Equal(t, ActionUpdate, audit[1].Action)
+		require.Equal(t, ActionRollback, audit[2].Action)
+
+		return nil
+	})
+}
+
 func TestDeleteNonExistentRecord(t *testing.T) {
 	dbPath := "/tmp/test_flatgas_delete_nonexistent.db"
 	defer os.Remove(dbPath)
