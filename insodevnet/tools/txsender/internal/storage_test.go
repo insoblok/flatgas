@@ -222,7 +222,6 @@ func TestUpdateRecord(t *testing.T) {
 	initial := MyValue{Data: "before"}
 	updated := MyValue{Data: "after"}
 
-	// ❌ Attempt update before create — should fail
 	err = db.Update(func(tx *bbolt.Tx) error {
 		return UpdateRecord(tx, key, updated, schema)
 	})
@@ -260,4 +259,31 @@ func TestUpdateRecord(t *testing.T) {
 
 		return nil
 	})
+}
+
+func TestDeleteNonExistentRecord(t *testing.T) {
+	dbPath := "/tmp/test_flatgas_delete_nonexistent.db"
+	defer os.Remove(dbPath)
+
+	db, err := bbolt.Open(dbPath, 0666, nil)
+	require.NoError(t, err)
+	defer db.Close()
+
+	type MyValue struct {
+		Data string
+	}
+
+	schema := StoreBuckets{
+		Current: "current",
+		Journal: "journal",
+		Audit:   "audit",
+	}
+
+	key := "ghost:001"
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		return DeleteRecord[MyValue](tx, key, schema)
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
 }
