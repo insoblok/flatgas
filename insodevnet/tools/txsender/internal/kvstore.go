@@ -177,3 +177,57 @@ func RollbackRecord[V any](tx *bbolt.Tx, buckets StoreBuckets) error {
 
 	return nil
 }
+
+// DeleteRecord removes a record from the current bucket, logs the action in the journal and auditlog.
+func DeleteRecord[V any](tx *bbolt.Tx, key string, buckets StoreBuckets) error {
+	// Buckets
+	currentBkt, err := tx.CreateBucketIfNotExists([]byte(buckets.Current))
+	if err != nil {
+		return fmt.Errorf("create/get current bucket: %w", err)
+	}
+	journalBkt, err := tx.CreateBucketIfNotExists([]byte(buckets.Journal))
+	if err != nil {
+		return fmt.Errorf("create/get journal bucket: %w", err)
+	}
+	auditBkt, err := tx.CreateBucketIfNotExists([]byte(buckets.Audit))
+	if err != nil {
+		return fmt.Errorf("create/get audit bucket: %w", err)
+	}
+
+	// Retrieve current value
+	original := currentBkt.Get([]byte(key))
+	if original == nil {
+		return fmt.Errorf("key '%s' not found for delete", key)
+	}
+
+	var value V
+	if err := json.Unmarshal(original, &value); err != nil {
+		return fmt.Errorf("unmarshal current value: %w", err)
+	}
+
+	timestamp := time.Now()
+	record := Record[V]{
+		Action:    ActionDelete,
+		Key:       key,
+		Value:     value,
+		Timestamp: timestamp,
+	}
+	recordBytes, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal delete record: %w", err)
+	}
+
+	// Apply operations
+	if err := currentBkt.Delete([]byte(key)); err != nil {
+		return fmt.Errorf("delete from current: %w", err)
+	}
+	journalKey := []byte(timestamp.Format(time.RFC3339Nano))
+	if err := journalBkt.Put(journalKey, recordBytes); err != nil {
+		return fmt.Errorf("write journal entry: %w", err)
+	}
+	if err := auditBkt.Put(journalKey, recordBytes); err != nil {
+		return fmt.Errorf("write audit entry: %w", err)
+	}
+
+	return nil
+}

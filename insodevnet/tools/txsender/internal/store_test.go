@@ -94,6 +94,30 @@ func TestPutAndEnumerateRecord(t *testing.T) {
 			return nil
 		})
 	})
+
+	t.Run("DeleteRecord", func(t *testing.T) {
+		err = db.Update(func(tx *bbolt.Tx) error {
+			return DeleteRecord[testValue](tx, "test-key", buckets)
+		})
+		if err != nil {
+			t.Fatalf("DeleteRecord failed: %v", err)
+		}
+
+		err = db.View(func(tx *bbolt.Tx) error {
+			bucket := tx.Bucket([]byte(buckets.Current))
+			if bucket == nil {
+				t.Fatal("current bucket not found after delete")
+			}
+			val := bucket.Get([]byte("test-key"))
+			if val != nil {
+				t.Errorf("Expected key to be deleted, but found value: %s", val)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Error verifying delete: %v", err)
+		}
+	})
 }
 
 func TestRollbackCreate(t *testing.T) {
