@@ -220,6 +220,70 @@ func GetRecord[V any](tx *bbolt.Tx, key string, schema StoreBuckets) (*Record[V]
 	return &value, nil
 }
 
+func RollbackRecord[V any](tx *bbolt.Tx, schema StoreBuckets) error {
+	buckets, err := getBuckets(tx, schema, false)
+	if err != nil {
+		return fmt.Errorf("Buckets failed: %w", err)
+	}
+
+	c := buckets.Journal.Cursor()
+	k, v := c.Last()
+	if k == nil {
+		return fmt.Errorf("no journal entries to rollback")
+	}
+
+	var entry Record[V]
+	if err = json.Unmarshal(v, &entry); err != nil {
+		return fmt.Errorf("unmarshal journal entry: %w", err)
+	}
+
+	switch entry.Action {
+	case ActionCreate:
+		// Created earlier, so now we delete
+		if err = buckets.Current.Delete([]byte(entry.Key)); err != nil {
+			return fmt.Errorf("rollback delete failed: %w", err)
+		}
+
+	case ActionDelete, ActionUpdate:
+		// Deleted or updated earlier, so now we restore
+		valueBytes, err := json.Marshal(entry.Value)
+		if err != nil {
+			return fmt.Errorf("marshal restored value: %w", err)
+		}
+		if err := buckets.Current.Put([]byte(entry.Key), valueBytes); err != nil {
+			return fmt.Errorf("rollback put failed: %w", err)
+		}
+
+	case ActionRollback:
+		return fmt.Errorf("cannot rollback a rollback entry")
+
+	default:
+		return fmt.Errorf("unknown action: %s", entry.Action)
+	}
+
+	if err = buckets.Journal.Delete(k); err != nil {
+		return fmt.Errorf("delete journal entry: %w", err)
+	}
+
+	rollbackEntry := Record[V]{
+		Action:    ActionRollback,
+		Key:       entry.Key,
+		Value:     entry.Value,
+		Timestamp: time.Now(),
+	}
+
+	auditKey := []byte(rollbackEntry.Timestamp.Format(time.RFC3339Nano))
+	data, err := json.Marshal(rollbackEntry)
+	if err != nil {
+		return fmt.Errorf("marshal rollback audit entry: %w", err)
+	}
+	if err := buckets.Audit.Put(auditKey, data); err != nil {
+		return fmt.Errorf("write rollback audit entry: %w", err)
+	}
+
+	return nil
+}
+
 func PutRecord[V any](
 	tx *bbolt.Tx,
 	key string,
@@ -292,80 +356,4 @@ func EnumerateBucket[V any](tx *bbolt.Tx, bucketName Bucket) ([]Record[V], error
 		return nil
 	})
 	return records, err
-}
-
-func RollbackRecord[V any](tx *bbolt.Tx, buckets StoreBuckets) error {
-	journal := tx.Bucket([]byte(buckets.Journal))
-	if journal == nil {
-		return fmt.Errorf("journal bucket not found: %s", buckets.Journal)
-	}
-
-	// Find the latest record by iterating in reverse
-	c := journal.Cursor()
-	k, v := c.Last()
-	if k == nil {
-		return fmt.Errorf("no journal entries to rollback")
-	}
-
-	var entry Record[V]
-	if err := json.Unmarshal(v, &entry); err != nil {
-		return fmt.Errorf("unmarshal journal entry: %w", err)
-	}
-
-	current := tx.Bucket([]byte(buckets.Current))
-	if current == nil {
-		return fmt.Errorf("current bucket not found: %s", buckets.Current)
-	}
-
-	// Apply rollback based on original action
-	switch entry.Action {
-	case ActionCreate:
-		// Created earlier, so now we delete
-		if err := current.Delete([]byte(entry.Key)); err != nil {
-			return fmt.Errorf("rollback delete failed: %w", err)
-		}
-
-	case ActionDelete, ActionUpdate:
-		// Deleted or updated earlier, so now we restore
-		valueBytes, err := json.Marshal(entry.Value)
-		if err != nil {
-			return fmt.Errorf("marshal restored value: %w", err)
-		}
-		if err := current.Put([]byte(entry.Key), valueBytes); err != nil {
-			return fmt.Errorf("rollback put failed: %w", err)
-		}
-
-	case ActionRollback:
-		return fmt.Errorf("cannot rollback a rollback entry")
-
-	default:
-		return fmt.Errorf("unknown action: %s", entry.Action)
-	}
-
-	// Remove the journal entry
-	if err := journal.Delete(k); err != nil {
-		return fmt.Errorf("delete journal entry: %w", err)
-	}
-
-	// Add audit entry
-	rollbackEntry := Record[V]{
-		Action:    ActionRollback,
-		Key:       entry.Key,
-		Value:     entry.Value,
-		Timestamp: time.Now(),
-	}
-	audit := tx.Bucket([]byte(buckets.Audit))
-	if audit == nil {
-		return fmt.Errorf("audit bucket not found: %s", buckets.Audit)
-	}
-	auditKey := []byte(rollbackEntry.Timestamp.Format(time.RFC3339Nano))
-	data, err := json.Marshal(rollbackEntry)
-	if err != nil {
-		return fmt.Errorf("marshal rollback audit entry: %w", err)
-	}
-	if err := audit.Put(auditKey, data); err != nil {
-		return fmt.Errorf("write rollback audit entry: %w", err)
-	}
-
-	return nil
 }
