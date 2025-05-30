@@ -17,6 +17,8 @@ var nodeInfoCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resolvedRPC := nodeRPC
 		base, _ := cmd.Flags().GetString("base")
+
+		fmt.Printf("what is base %s\n", base)
 		if config, err := cfg.LoadConfig(base); err == nil {
 			if val, ok := config.RPCs[nodeRPC]; ok {
 				resolvedRPC = val
@@ -65,6 +67,7 @@ var nodeInfoCmd = &cobra.Command{
 }
 
 func init() {
+	nodeInfoCmd.Flags().String("base", ".", "Base path to flatgas root")
 	nodeInfoCmd.Flags().StringVar(&nodeRPC, "rpc", "http://localhost:8545", "RPC endpoint")
 }
 
