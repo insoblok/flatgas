@@ -15,6 +15,7 @@ func main() {
 		Short: "Flatgas devnet CLI for account and transaction management",
 	}
 
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.AddCommand(
 		cmd.GetConfigCommand(),
 		cmd.GetAccountsCommand(),
