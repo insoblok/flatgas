@@ -54,7 +54,7 @@ var contractDeployCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 
 		fmt.Printf("📦 Compiling contract from %s ...\n", src)
-		cmdOut, err := exec.Command("solc", "--combined-json", "abi,bin", src).Output()
+		cmdOut, err := exec.Command("solc", "--evm-version", "london", "--combined-json", "abi,bin", src).Output()
 		if err != nil {
 			fmt.Printf("❌ Compilation failed: %v\n", err)
 			return
