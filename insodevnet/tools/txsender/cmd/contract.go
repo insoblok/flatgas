@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -165,10 +166,26 @@ var contractDeployCmd = &cobra.Command{
 				baseName := filepath.Base(name)
 				baseName = strings.Split(baseName, ":")[1]
 				targetDir := filepath.Join(outDir, baseName)
+
 				os.MkdirAll(targetDir, 0755)
 
-				os.WriteFile(filepath.Join(targetDir, baseName+".abi"), []byte(contract.ABI), 0644)
-				os.WriteFile(filepath.Join(targetDir, baseName+".bin"), []byte(contract.Bin), 0644)
+				files, err := os.ReadDir(targetDir)
+				version := 1
+				if err == nil {
+					for _, f := range files {
+						if f.IsDir() && strings.HasPrefix(f.Name(), "v") {
+							vNum, err := strconv.Atoi(strings.TrimPrefix(f.Name(), "v"))
+							if err == nil && vNum >= version {
+								version = vNum + 1
+							}
+						}
+					}
+				}
+				versionedDir := filepath.Join(targetDir, fmt.Sprintf("v%d", version))
+
+				os.MkdirAll(versionedDir, 0755)
+				os.WriteFile(filepath.Join(versionedDir, baseName+".abi"), []byte(contract.ABI), 0644)
+				os.WriteFile(filepath.Join(versionedDir, baseName+".bin"), []byte(contract.Bin), 0644)
 
 				meta := DeploymentResult{
 					Contract:   baseName,
@@ -182,11 +199,25 @@ var contractDeployCmd = &cobra.Command{
 					DeployedAt: time.Now().UTC(),
 				}
 				data, _ := json.MarshalIndent(meta, "", "  ")
-				os.WriteFile(filepath.Join(targetDir, baseName+".deploy.json"), data, 0644)
+				os.WriteFile(filepath.Join(versionedDir, baseName+".deploy.json"), data, 0644)
 				fmt.Printf("💾 Written output to: %s\n", targetDir)
+
+				solCopy := filepath.Join(versionedDir, filepath.Base(src))
+				println(solCopy)
+				if err := copyFile(src, solCopy); err != nil {
+					log.Fatalf("❌ Failed to copy .sol source: %v", err)
+				}
 			}
 		}
 	},
+}
+
+func copyFile(src, dst string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, input, 0o644)
 }
 
 func waitForReceipt(client *ethclient.Client, txHash string) (*types.Receipt, error) {
