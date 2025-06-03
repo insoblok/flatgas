@@ -23,10 +23,13 @@ import (
 
 type DeploymentResult struct {
 	Contract   string    `json:"contract"`
+	Owner      string    `json:"owner"`
 	Source     string    `json:"source"`
 	Network    string    `json:"network"`
+	RPC        string    `json:"rpc"`
 	Address    string    `json:"address"`
 	TxHash     string    `json:"txHash"`
+	Status     string    `json:"status"`
 	DeployedAt time.Time `json:"deployedAt"`
 }
 
@@ -152,6 +155,10 @@ var contractDeployCmd = &cobra.Command{
 			}
 
 			addr := receipt.ContractAddress.Hex()
+			deploymentStatus := "failed"
+			if receipt.Status == 1 {
+				deploymentStatus = "confirmed"
+			}
 			fmt.Printf("✅ Contract deployed at: %s\n", addr)
 
 			if outDir != "" {
@@ -165,10 +172,13 @@ var contractDeployCmd = &cobra.Command{
 
 				meta := DeploymentResult{
 					Contract:   baseName,
+					Owner:      account.Address.Hex(),
 					Source:     src,
 					Network:    "devnet",
+					RPC:        rpcURL,
 					Address:    addr,
 					TxHash:     txHash,
+					Status:     deploymentStatus,
 					DeployedAt: time.Now().UTC(),
 				}
 				data, _ := json.MarshalIndent(meta, "", "  ")
