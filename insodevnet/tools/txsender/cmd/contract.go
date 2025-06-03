@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -54,6 +55,9 @@ var contractDeployCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 
 		fmt.Printf("📦 Compiling contract from %s ...\n", src)
+		if err := validatePragmaVersion(src); err != nil {
+			log.Fatalf("❌ Pragma check failed: %v", err)
+		}
 		cmdOut, err := exec.Command("solc", "--evm-version", "london", "--combined-json", "abi,bin", src).Output()
 		if err != nil {
 			fmt.Printf("❌ Compilation failed: %v\n", err)
@@ -201,4 +205,35 @@ func GetContractCommand() *cobra.Command {
 	contractDeployCmd.MarkFlagRequired("base")
 	contractCmd.AddCommand(contractDeployCmd)
 	return contractCmd
+}
+
+var maxSupportedVersion = "0.8.19"
+
+func validatePragmaVersion(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("could not read file: %v", err)
+	}
+
+	content := string(data)
+	re := regexp.MustCompile(`(?i)pragma\s+solidity\s+([^;]+);`)
+	matches := re.FindAllStringSubmatch(content, -1)
+
+	if len(matches) == 0 {
+		return fmt.Errorf("no pragma solidity statement found in %s", path)
+	}
+	if len(matches) > 1 {
+		return fmt.Errorf("multiple pragma statements found in %s; not supported", path)
+	}
+
+	versionSpec := strings.TrimSpace(matches[0][1])
+
+	if strings.Contains(versionSpec, "0.8.20") ||
+		strings.Contains(versionSpec, "0.9") ||
+		strings.Contains(versionSpec, ">0.8.19") ||
+		strings.Contains(versionSpec, ">=0.8.20") {
+		return fmt.Errorf("unsupported pragma: %q — max supported is %s", versionSpec, maxSupportedVersion)
+	}
+
+	return nil
 }
