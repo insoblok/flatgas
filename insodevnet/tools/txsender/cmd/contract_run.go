@@ -1,15 +1,19 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +42,17 @@ var contractRunCmd = &cobra.Command{
 
 		contractName := filepath.Base(filepath.Dir(contractDir))
 		fmt.Printf("📦 Using contract: %s\n", contractName)
+
+		metaPath := filepath.Join(contractDir, contractName+".deploy.json")
+		metaData, err := os.ReadFile(metaPath)
+		PrintIfErrorAndExit("❌ Failed to read metadata JSON", err)
+
+		var meta struct {
+			Address string `json:"address"`
+		}
+		err = json.Unmarshal(metaData, &meta)
+		PrintIfErrorAndExit("❌ Failed to parse metadata JSON", err)
+		contractAddress := common.HexToAddress(meta.Address)
 
 		abiFile := filepath.Join(contractDir, contractName+".abi")
 		abiData, err := ioutil.ReadFile(abiFile)
@@ -138,7 +153,24 @@ var contractRunCmd = &cobra.Command{
 			PrintIfErrorAndExit("Failed to decrypt key", err)
 			fmt.Println(account.Address.Hex())
 		} else {
+			msg := ethereum.CallMsg{
+				To:   &contractAddress,
+				Data: inputData,
+			}
 
+			ctx := context.Background()
+			result, err := client.CallContract(ctx, msg, nil)
+			if err != nil {
+				log.Fatalf("CallContract error: %v", err)
+			}
+
+			outputs := method.Outputs
+			values, err := outputs.Unpack(result)
+			if err != nil {
+				fmt.Println("Failed to unpack result: %v", err)
+			}
+
+			fmt.Printf("✅ Method call result: %v\n", values)
 		}
 
 		fmt.Println("📦 Parsed inputs:")
