@@ -30,6 +30,7 @@ type DeploymentResult struct {
 	RPC        string    `json:"rpc"`
 	Address    string    `json:"address"`
 	TxHash     string    `json:"txHash"`
+	Gas        uint64    `json:"gas"`
 	Status     string    `json:"status"`
 	DeployedAt time.Time `json:"deployedAt"`
 }
@@ -43,18 +44,20 @@ var contractDeployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Compile and deploy a smart contract",
 	Run: func(cmd *cobra.Command, args []string) {
+
 		base, _ := cmd.Flags().GetString("base")
 		dbPath := internal.GetAccountsDBFilePath(base)
-		db, err := bbolt.Open(dbPath, 0600, nil)
-		PrintIfErrorAndExit("failed to open DB", err)
-		defer db.Close()
-
 		src, _ := cmd.Flags().GetString("src")
 		outDir, _ := cmd.Flags().GetString("out")
 		alias, _ := cmd.Flags().GetString("from")
 		rpcURL, _ := cmd.Flags().GetString("rpc")
 		password, _ := cmd.Flags().GetString("password")
 		constructorArgs, _ := cmd.Flags().GetString("args")
+		gasLimit, _ := cmd.Flags().GetUint64("gas")
+
+		db, err := bbolt.Open(dbPath, 0600, nil)
+		PrintIfErrorAndExit("failed to open DB", err)
+		defer db.Close()
 
 		fmt.Printf("📦 Compiling contract from %s ...\n", src)
 		err = validatePragmaVersion(src)
@@ -123,7 +126,6 @@ var contractDeployCmd = &cobra.Command{
 			nonce, err := client.PendingNonceAt(context.Background(), fromAddr)
 			PrintIfErrorAndExit("Failed to get Nonce", err)
 
-			gasLimit := uint64(3000000)
 			gasPrice := big.NewInt(1e9)
 			value := big.NewInt(0)
 
@@ -182,6 +184,7 @@ var contractDeployCmd = &cobra.Command{
 					RPC:        rpcURL,
 					Address:    addr,
 					TxHash:     txHash,
+					Gas:        gasLimit,
 					Status:     deploymentStatus,
 					DeployedAt: time.Now().UTC(),
 				}
@@ -231,6 +234,7 @@ func GetContractCommand() *cobra.Command {
 	contractDeployCmd.Flags().String("password", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("base", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("args", "", "Constructor arguments in JSON array format")
+	contractDeployCmd.Flags().Uint64("gas", 3000000, "Optional gas limit for contract deployment")
 
 	contractDeployCmd.MarkFlagRequired("rpc")
 	contractDeployCmd.MarkFlagRequired("src")
