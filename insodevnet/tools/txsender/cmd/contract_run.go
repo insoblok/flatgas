@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
@@ -23,9 +24,9 @@ var contractRunCmd = &cobra.Command{
 		base, _ := cmd.Flags().GetString("base")
 		contractDir, _ := cmd.Flags().GetString("dir")
 		methodName, _ := cmd.Flags().GetString("method")
-		argsJSON, _ := cmd.Flags().GetString("args")
+		methodArgs, _ := cmd.Flags().GetString("args")
 		from, _ := cmd.Flags().GetString("from")
-		rpc, _ := cmd.Flags().GetString("rpc")
+		rpcURL, _ := cmd.Flags().GetString("rpc")
 		password, _ := cmd.Flags().GetString("password")
 		gasLimit, _ := cmd.Flags().GetUint64("gas")
 
@@ -60,6 +61,33 @@ var contractRunCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		var inputData []byte
+		if len(method.Inputs) > 0 {
+			if methodArgs == "" {
+				fmt.Printf("❌ Method '%s' expects %d argument(s), but none were provided (--args).\n", methodName, len(method.Inputs))
+				os.Exit(1)
+			}
+			var parsedArgs []interface{}
+			err := json.Unmarshal([]byte(methodArgs), &parsedArgs)
+			if err != nil {
+				fmt.Printf("❌ Failed to parse --args as JSON: %v\n", err)
+				os.Exit(1)
+			}
+			if len(parsedArgs) != len(method.Inputs) {
+				fmt.Printf("❌ Method '%s' expects %d argument(s), but got %d.\n", methodName, len(method.Inputs), len(parsedArgs))
+				os.Exit(1)
+			}
+			inputData, err = method.Inputs.Pack(parsedArgs...)
+			PrintIfErrorAndExit("Failed to pack arguments", err)
+		} else {
+			if methodArgs != "" {
+				fmt.Printf("⚠️ Method '%s' does not take arguments. Provided --args will be ignored.\n", methodName)
+			}
+			inputData, err = method.Inputs.Pack()
+			PrintIfErrorAndExit("Failed to pack", err)
+		}
+
+		println(inputData)
 		isView := method.StateMutability == "view" || method.StateMutability == "pure"
 		isTransacted := !isView
 		if isView {
@@ -67,6 +95,10 @@ var contractRunCmd = &cobra.Command{
 		} else {
 			fmt.Printf("⛽  Method '%s' is transacted (requires gas).\n", methodName)
 		}
+
+		client, err := ethclient.Dial(rpcURL)
+		PrintIfErrorAndExit("Failed to connect to Ethereum RPC", err)
+		defer client.Close()
 
 		if isTransacted {
 			if from == "" {
@@ -105,14 +137,16 @@ var contractRunCmd = &cobra.Command{
 			account, err := keystore.DecryptKey(keyJSON, password)
 			PrintIfErrorAndExit("Failed to decrypt key", err)
 			fmt.Println(account.Address.Hex())
+		} else {
+
 		}
 
 		fmt.Println("📦 Parsed inputs:")
 		fmt.Println("ContractDir:", contractDir)
 		fmt.Println("Method:", methodName)
-		fmt.Println("Args:", argsJSON)
+		fmt.Println("Args:", methodArgs)
 		fmt.Println("From:", from)
-		fmt.Println("RPC:", rpc)
+		fmt.Println("RPC:", rpcURL)
 		fmt.Println("Password:", password)
 		fmt.Println("Gas:", gasLimit)
 	},
