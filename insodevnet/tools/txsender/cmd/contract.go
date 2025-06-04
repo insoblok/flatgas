@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -11,7 +12,6 @@ import (
 	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
-	"log"
 	"math/big"
 	"os"
 	"os/exec"
@@ -57,10 +57,11 @@ var contractDeployCmd = &cobra.Command{
 		alias, _ := cmd.Flags().GetString("from")
 		rpcURL, _ := cmd.Flags().GetString("rpc")
 		password, _ := cmd.Flags().GetString("password")
+		constructorArgs, _ := cmd.Flags().GetString("args")
 
 		fmt.Printf("📦 Compiling contract from %s ...\n", src)
 		if err := validatePragmaVersion(src); err != nil {
-			log.Fatalf("❌ Pragma check failed: %v", err)
+			fmt.Printf("❌ Pragma check failed: %v\n", err)
 		}
 		cmdOut, err := exec.Command("solc", "--evm-version", "london", "--combined-json", "abi,bin", src).Output()
 		if err != nil {
@@ -84,6 +85,24 @@ var contractDeployCmd = &cobra.Command{
 			fmt.Printf("✅ Found contract: %s\n", name)
 			fmt.Printf("📜 ABI: %s\n", contract.ABI)
 			fmt.Printf("🔢 Bytecode: %.20s... (%d bytes)\n", contract.Bin, len(contract.Bin)/2)
+
+			input := []byte{}
+			if constructorArgs != "" {
+				var parsedArgs []interface{}
+				if err := json.Unmarshal([]byte(constructorArgs), &parsedArgs); err != nil {
+					fmt.Printf("❌ Failed to parse constructor arguments. Please pass them as a JSON array, e.g.: --args '[\"hello\", 42]'. Error: %s\n", err)
+				}
+
+				contractAbi := string(contract.ABI)
+				parsedABI, err := abi.JSON(strings.NewReader(contractAbi))
+				if err != nil {
+					fmt.Printf("❌ Failed to parse ABI: %v\n", err)
+				}
+				input, err = parsedABI.Pack("", parsedArgs...)
+				if err != nil {
+					fmt.Printf("❌ Failed to ABI encode constructor args: %v", err)
+				}
+			}
 
 			bytecode := common.FromHex(contract.Bin)
 
@@ -120,14 +139,14 @@ var contractDeployCmd = &cobra.Command{
 
 			client, err := ethclient.Dial(rpcURL)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Printf("❌ %v\n", err)
 			}
 			defer client.Close()
 
 			fromAddr := account.Address
 			nonce, err := client.PendingNonceAt(context.Background(), fromAddr)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Printf("❌ %v\n", err)
 			}
 
 			gasLimit := uint64(3000000)
@@ -135,16 +154,16 @@ var contractDeployCmd = &cobra.Command{
 			value := big.NewInt(0)
 
 			chainID, _ := client.NetworkID(context.Background())
-
-			tx := types.NewContractCreation(nonce, value, gasLimit, gasPrice, bytecode)
+			data := append(bytecode, input...)
+			tx := types.NewContractCreation(nonce, value, gasLimit, gasPrice, data)
 			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), account.PrivateKey)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Printf("❌ %v\n", err)
 			}
 
 			err = client.SendTransaction(context.Background(), signedTx)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Printf("❌ %v\n", err)
 			}
 
 			txHash := signedTx.Hash().Hex()
@@ -152,7 +171,7 @@ var contractDeployCmd = &cobra.Command{
 
 			receipt, err := waitForReceipt(client, txHash)
 			if err != nil {
-				log.Fatal(err)
+				fmt.Printf("❌ %v\n", err)
 			}
 
 			addr := receipt.ContractAddress.Hex()
@@ -205,13 +224,19 @@ var contractDeployCmd = &cobra.Command{
 				solCopy := filepath.Join(versionedDir, filepath.Base(src))
 				println(solCopy)
 				if err := copyFile(src, solCopy); err != nil {
-					log.Fatalf("❌ Failed to copy .sol source: %v", err)
+					fmt.Printf("❌ Failed to copy .sol source: %v\n", err)
 				}
 			}
 		}
 	},
 }
 
+func PrintIfErrorAndExit(context string, err error) {
+	if err != nil {
+		fmt.Printf("❌ %s: %v\n", context, err)
+		os.Exit(-1)
+	}
+}
 func copyFile(src, dst string) error {
 	input, err := os.ReadFile(src)
 	if err != nil {
@@ -239,6 +264,8 @@ func GetContractCommand() *cobra.Command {
 	contractDeployCmd.Flags().String("rpc", "", "Flatgas RPC endpoint (e.g., http://localhost:8545)")
 	contractDeployCmd.Flags().String("password", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("base", "", "Password to decrypt key")
+	contractDeployCmd.Flags().String("args", "", "Constructor arguments in JSON array format")
+
 	contractDeployCmd.MarkFlagRequired("rpc")
 	contractDeployCmd.MarkFlagRequired("src")
 	contractDeployCmd.MarkFlagRequired("from")
