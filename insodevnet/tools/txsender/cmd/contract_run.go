@@ -105,7 +105,49 @@ var contractRunCmd = &cobra.Command{
 				fmt.Printf("❌ Method '%s' expects %d argument(s), but got %d.\n", methodName, len(method.Inputs), len(parsedArgs))
 				os.Exit(1)
 			}
-			argData, err := method.Inputs.Pack(parsedArgs...)
+			fmt.Printf("🧪 Raw parsedArgs type check:\n")
+			for i, arg := range parsedArgs {
+				fmt.Printf("  [%d] Type: %T, Value: %#v\n", i, arg, arg)
+			}
+
+			var typedArgs []interface{}
+			for i, arg := range parsedArgs {
+				expected := method.Inputs[i].Type.String()
+				switch expected {
+				case "address":
+					addrStr, ok := arg.(string)
+					if !ok {
+						log.Fatalf("Argument %d: expected string for address", i)
+					}
+					typedArgs = append(typedArgs, common.HexToAddress(addrStr))
+
+				case "uint256":
+					// You could also use json.Number + big.Int here for safer parsing
+					floatVal, ok := arg.(float64)
+					if !ok {
+						log.Fatalf("Argument %d: expected number for uint256", i)
+					}
+					typedArgs = append(typedArgs, big.NewInt(int64(floatVal)))
+
+				case "bool":
+					boolVal, ok := arg.(bool)
+					if !ok {
+						log.Fatalf("Argument %d: expected bool", i)
+					}
+					typedArgs = append(typedArgs, boolVal)
+
+				case "string":
+					strVal, ok := arg.(string)
+					if !ok {
+						log.Fatalf("Argument %d: expected string", i)
+					}
+					typedArgs = append(typedArgs, strVal)
+
+				default:
+					log.Fatalf("Unsupported argument type: %s", expected)
+				}
+			}
+			argData, err := method.Inputs.Pack(typedArgs...)
 			PrintIfErrorAndExit("Failed to pack arguments", err)
 			inputData = append(method.ID, argData...)
 		} else {
