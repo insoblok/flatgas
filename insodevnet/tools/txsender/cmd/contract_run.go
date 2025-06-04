@@ -56,11 +56,16 @@ var contractRunCmd = &cobra.Command{
 		}
 
 		isView := method.StateMutability == "view" || method.StateMutability == "pure"
-
+		isTransacted := !isView
 		if isView {
 			fmt.Printf("ℹ️  Method '%s' is read-only (no gas needed).\n", methodName)
 		} else {
 			fmt.Printf("⛽  Method '%s' is transacted (requires gas).\n", methodName)
+		}
+
+		if isTransacted && from == "" {
+			fmt.Println("❌ This method modifies state and requires a sender (--from).")
+			os.Exit(1)
 		}
 
 		fmt.Println("📦 Parsed inputs:")
