@@ -23,16 +23,17 @@ import (
 )
 
 type DeploymentResult struct {
-	Contract   string    `json:"contract"`
-	Owner      string    `json:"owner"`
-	Source     string    `json:"source"`
-	Network    string    `json:"network"`
-	RPC        string    `json:"rpc"`
-	Address    string    `json:"address"`
-	TxHash     string    `json:"txHash"`
-	Gas        uint64    `json:"gas"`
-	Status     string    `json:"status"`
-	DeployedAt time.Time `json:"deployedAt"`
+	Contract        string    `json:"contract"`
+	Owner           string    `json:"owner"`
+	Source          string    `json:"source"`
+	Network         string    `json:"network"`
+	RPC             string    `json:"rpc"`
+	Address         string    `json:"address"`
+	TxHash          string    `json:"txHash"`
+	Gas             uint64    `json:"gas"`
+	Status          string    `json:"status"`
+	ConstructorArgs string    `json:"constructorArgs"`
+	DeployedAt      time.Time `json:"deployedAt"`
 }
 
 var contractCmd = &cobra.Command{
@@ -80,17 +81,26 @@ var contractDeployCmd = &cobra.Command{
 			fmt.Printf("📜 ABI: %s\n", contract.ABI)
 			fmt.Printf("🔢 Bytecode: %.20s... (%d bytes)\n", contract.Bin, len(contract.Bin)/2)
 
+			contractAbi, err := abi.JSON(strings.NewReader(string(contract.ABI)))
+			PrintIfErrorAndExit("Failed to parse ABI", err)
+			constructor := contractAbi.Constructor
+
+			if len(constructor.Inputs) == 0 && len(constructorArgs) > 0 {
+				fmt.Println("❌ This contract does not take constructor arguments.")
+				os.Exit(1)
+			}
+
+			if len(constructor.Inputs) > 0 && len(constructorArgs) == 0 {
+				fmt.Println("❌ This contract requires constructor arguments but none were provided.")
+				os.Exit(1)
+			}
+
 			input := []byte{}
+			var parsedArgs []interface{}
 			if constructorArgs != "" {
-				var parsedArgs []interface{}
 				err = json.Unmarshal([]byte(constructorArgs), &parsedArgs)
 				PrintIfErrorAndExit("Failed to parse constructor arguments. Please pass them as a JSON array, e.g.: --args '[\"hello\", 42]'. Error", err)
-
-				contractAbi := string(contract.ABI)
-				parsedABI, err := abi.JSON(strings.NewReader(contractAbi))
-				PrintIfErrorAndExit("Failed to parse ABI", err)
-
-				input, err = parsedABI.Pack("", parsedArgs...)
+				input, err = contractAbi.Pack("", parsedArgs...)
 				PrintIfErrorAndExit("Failed to ABI encode constructor args", err)
 			}
 
@@ -177,16 +187,17 @@ var contractDeployCmd = &cobra.Command{
 				os.WriteFile(filepath.Join(versionedDir, baseName+".bin"), []byte(contract.Bin), 0644)
 
 				meta := DeploymentResult{
-					Contract:   baseName,
-					Owner:      account.Address.Hex(),
-					Source:     src,
-					Network:    "devnet",
-					RPC:        rpcURL,
-					Address:    addr,
-					TxHash:     txHash,
-					Gas:        gasLimit,
-					Status:     deploymentStatus,
-					DeployedAt: time.Now().UTC(),
+					Contract:        baseName,
+					Owner:           account.Address.Hex(),
+					Source:          src,
+					Network:         "devnet",
+					RPC:             rpcURL,
+					Address:         addr,
+					TxHash:          txHash,
+					Gas:             gasLimit,
+					Status:          deploymentStatus,
+					ConstructorArgs: constructorArgs,
+					DeployedAt:      time.Now().UTC(),
 				}
 				data, _ := json.MarshalIndent(meta, "", "  ")
 				os.WriteFile(filepath.Join(versionedDir, baseName+".deploy.json"), data, 0644)
