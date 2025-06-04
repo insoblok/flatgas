@@ -49,6 +49,11 @@ var contractRunCmd = &cobra.Command{
 			fmt.Printf(" - %s(%s) -> %s\n", name, method.Inputs, mut)
 		}
 
+		if _, exists := contractABI.Methods[methodName]; !exists {
+			fmt.Printf("❌ Method '%s' not found in contract ABI.\n", methodName)
+			os.Exit(1)
+		}
+
 		fmt.Println("📦 Parsed inputs:")
 		fmt.Println("ContractDir:", contractDir)
 		fmt.Println("Method:", methodName)
