@@ -8,12 +8,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,6 +169,35 @@ var contractRunCmd = &cobra.Command{
 			account, err := keystore.DecryptKey(keyJSON, password)
 			PrintIfErrorAndExit("Failed to decrypt key", err)
 			fmt.Println("🔓 Account address:", account.Address.Hex())
+			// Build and send the transaction
+			ctx := context.Background()
+
+			nonce, err := client.PendingNonceAt(ctx, account.Address)
+			PrintIfErrorAndExit("Failed to get account nonce", err)
+
+			chainID, err := client.NetworkID(ctx)
+			PrintIfErrorAndExit("Failed to get chain ID", err)
+
+			gasPrice, err := client.SuggestGasPrice(ctx)
+			PrintIfErrorAndExit("Failed to get gas price", err)
+
+			tx := types.NewTransaction(
+				nonce,
+				contractAddress,
+				big.NewInt(0), // value = 0 for method call
+				gasLimit,
+				gasPrice,
+				inputData,
+			)
+
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), account.PrivateKey)
+			PrintIfErrorAndExit("Failed to sign transaction", err)
+
+			err = client.SendTransaction(ctx, signedTx)
+			PrintIfErrorAndExit("Failed to send transaction", err)
+
+			fmt.Printf("✅ Transaction sent: %s\n", signedTx.Hash().Hex())
+
 		} else {
 			msg := ethereum.CallMsg{
 				To:   &contractAddress,
