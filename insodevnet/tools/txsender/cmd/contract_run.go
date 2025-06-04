@@ -34,6 +34,9 @@ var contractRunCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 		gasLimit, _ := cmd.Flags().GetUint64("gas")
 
+		fmt.Printf("🔍 Base path: %s\n", base)
+		fmt.Printf("📂 Contract directory: %s\n", contractDir)
+
 		info, err := os.Stat(contractDir)
 		if err != nil || !info.IsDir() {
 			fmt.Printf("❌ Invalid contract directory: %s\n", contractDir)
@@ -44,6 +47,7 @@ var contractRunCmd = &cobra.Command{
 		fmt.Printf("📦 Using contract: %s\n", contractName)
 
 		metaPath := filepath.Join(contractDir, contractName+".deploy.json")
+		fmt.Printf("📄 Reading metadata from: %s\n", metaPath)
 		metaData, err := os.ReadFile(metaPath)
 		PrintIfErrorAndExit("❌ Failed to read metadata JSON", err)
 
@@ -53,8 +57,10 @@ var contractRunCmd = &cobra.Command{
 		err = json.Unmarshal(metaData, &meta)
 		PrintIfErrorAndExit("❌ Failed to parse metadata JSON", err)
 		contractAddress := common.HexToAddress(meta.Address)
+		fmt.Printf("🏠 Contract address: %s\n", contractAddress.Hex())
 
 		abiFile := filepath.Join(contractDir, contractName+".abi")
+		fmt.Printf("📄 Reading ABI from: %s\n", abiFile)
 		abiData, err := ioutil.ReadFile(abiFile)
 		PrintIfErrorAndExit("Failed to read ABI file", err)
 
@@ -76,8 +82,12 @@ var contractRunCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		fmt.Printf("🔧 Selected method: %s\n", method.Name)
+		fmt.Printf("🔧 Method mutability: %s\n", method.StateMutability)
+
 		var inputData []byte
 		if len(method.Inputs) > 0 {
+			fmt.Printf("🧩 Method requires %d argument(s).\n", len(method.Inputs))
 			if methodArgs == "" {
 				fmt.Printf("❌ Method '%s' expects %d argument(s), but none were provided (--args).\n", methodName, len(method.Inputs))
 				os.Exit(1)
@@ -88,6 +98,7 @@ var contractRunCmd = &cobra.Command{
 				fmt.Printf("❌ Failed to parse --args as JSON: %v\n", err)
 				os.Exit(1)
 			}
+			fmt.Printf("🧩 Parsed arguments: %v\n", parsedArgs)
 			if len(parsedArgs) != len(method.Inputs) {
 				fmt.Printf("❌ Method '%s' expects %d argument(s), but got %d.\n", methodName, len(method.Inputs), len(parsedArgs))
 				os.Exit(1)
@@ -102,7 +113,8 @@ var contractRunCmd = &cobra.Command{
 			PrintIfErrorAndExit("Failed to pack", err)
 		}
 
-		println(inputData)
+		fmt.Printf("📤 Packed input data: 0x%x\n", inputData)
+
 		isView := method.StateMutability == "view" || method.StateMutability == "pure"
 		isTransacted := !isView
 		if isView {
@@ -127,6 +139,7 @@ var contractRunCmd = &cobra.Command{
 			}
 
 			dbPath := internal.GetAccountsDBFilePath(base)
+			fmt.Printf("📁 Account DB path: %s\n", dbPath)
 			db, err := bbolt.Open(dbPath, 0600, nil)
 			PrintIfErrorAndExit("failed to open DB", err)
 			defer db.Close()
@@ -136,8 +149,7 @@ var contractRunCmd = &cobra.Command{
 				if bucket == nil {
 					return fmt.Errorf("Aliases bucket not found")
 				}
-
-				fmt.Println("Looking for alias", from)
+				fmt.Println("🔍 Looking for alias", from)
 				data := bucket.Get([]byte(from))
 				if data == nil {
 					return fmt.Errorf("Alias not found: %s", from)
@@ -151,7 +163,7 @@ var contractRunCmd = &cobra.Command{
 
 			account, err := keystore.DecryptKey(keyJSON, password)
 			PrintIfErrorAndExit("Failed to decrypt key", err)
-			fmt.Println(account.Address.Hex())
+			fmt.Println("🔓 Account address:", account.Address.Hex())
 		} else {
 			msg := ethereum.CallMsg{
 				To:   &contractAddress,
@@ -164,6 +176,7 @@ var contractRunCmd = &cobra.Command{
 				log.Fatalf("CallContract error: %v", err)
 			}
 
+			fmt.Printf("📥 Raw return data: 0x%x\n", result)
 			outputs := method.Outputs
 			values, err := outputs.Unpack(result)
 			if err != nil {
