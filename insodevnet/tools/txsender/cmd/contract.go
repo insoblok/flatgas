@@ -46,10 +46,7 @@ var contractDeployCmd = &cobra.Command{
 		base, _ := cmd.Flags().GetString("base")
 		dbPath := internal.GetAccountsDBFilePath(base)
 		db, err := bbolt.Open(dbPath, 0600, nil)
-		if err != nil {
-			fmt.Errorf("failed to open DB: %w", err)
-			return
-		}
+		PrintIfErrorAndExit("failed to open DB", err)
 		defer db.Close()
 
 		src, _ := cmd.Flags().GetString("src")
@@ -60,14 +57,11 @@ var contractDeployCmd = &cobra.Command{
 		constructorArgs, _ := cmd.Flags().GetString("args")
 
 		fmt.Printf("📦 Compiling contract from %s ...\n", src)
-		if err := validatePragmaVersion(src); err != nil {
-			fmt.Printf("❌ Pragma check failed: %v\n", err)
-		}
+		err = validatePragmaVersion(src)
+		PrintIfErrorAndExit("Pragma check failed", err)
+
 		cmdOut, err := exec.Command("solc", "--evm-version", "london", "--combined-json", "abi,bin", src).Output()
-		if err != nil {
-			fmt.Printf("❌ Compilation failed: %v\n", err)
-			return
-		}
+		PrintIfErrorAndExit("Compilation failed", err)
 
 		var solcOut struct {
 			Contracts map[string]struct {
@@ -75,11 +69,8 @@ var contractDeployCmd = &cobra.Command{
 				Bin string          `json:"bin"`
 			} `json:"contracts"`
 		}
-
-		if err := json.Unmarshal(cmdOut, &solcOut); err != nil {
-			fmt.Printf("❌ Failed to parse solc output: %v\n", err)
-			return
-		}
+		err = json.Unmarshal(cmdOut, &solcOut)
+		PrintIfErrorAndExit("Failed to parse solc output", err)
 
 		for name, contract := range solcOut.Contracts {
 			fmt.Printf("✅ Found contract: %s\n", name)
@@ -89,19 +80,15 @@ var contractDeployCmd = &cobra.Command{
 			input := []byte{}
 			if constructorArgs != "" {
 				var parsedArgs []interface{}
-				if err := json.Unmarshal([]byte(constructorArgs), &parsedArgs); err != nil {
-					fmt.Printf("❌ Failed to parse constructor arguments. Please pass them as a JSON array, e.g.: --args '[\"hello\", 42]'. Error: %s\n", err)
-				}
+				err = json.Unmarshal([]byte(constructorArgs), &parsedArgs)
+				PrintIfErrorAndExit("Failed to parse constructor arguments. Please pass them as a JSON array, e.g.: --args '[\"hello\", 42]'. Error", err)
 
 				contractAbi := string(contract.ABI)
 				parsedABI, err := abi.JSON(strings.NewReader(contractAbi))
-				if err != nil {
-					fmt.Printf("❌ Failed to parse ABI: %v\n", err)
-				}
+				PrintIfErrorAndExit("Failed to parse ABI", err)
+
 				input, err = parsedABI.Pack("", parsedArgs...)
-				if err != nil {
-					fmt.Printf("❌ Failed to ABI encode constructor args: %v", err)
-				}
+				PrintIfErrorAndExit("Failed to ABI encode constructor args", err)
 			}
 
 			bytecode := common.FromHex(contract.Bin)
@@ -111,43 +98,30 @@ var contractDeployCmd = &cobra.Command{
 			err = db.View(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket([]byte("aliases"))
 				if bucket == nil {
-					return fmt.Errorf("aliases bucket not found")
+					return fmt.Errorf("Aliases bucket not found")
 				}
 
 				data := bucket.Get([]byte(alias))
 				if data == nil {
-					return fmt.Errorf("alias not found: %s", alias)
+					return fmt.Errorf("Alias not found: %s", alias)
 				}
 				return json.Unmarshal(data, &record)
 			})
-			if err != nil {
-				fmt.Printf("❌ failed to read alias: %v\n", err)
-				os.Exit(-1)
-			}
+			PrintIfErrorAndExit("Failed to read alias", err)
 
 			keyJSON, err := json.Marshal(record.Keystore)
-			if err != nil {
-				fmt.Printf("❌ failed to marshal keystore: %v\n", err)
-				return
-			}
+			PrintIfErrorAndExit("Failed to marshal keystore", err)
 
 			account, err := keystore.DecryptKey(keyJSON, password)
-			if err != nil {
-				fmt.Printf("❌ failed to decrypt key: %v\n", err)
-				return
-			}
+			PrintIfErrorAndExit("Failed to decrypt key", err)
 
 			client, err := ethclient.Dial(rpcURL)
-			if err != nil {
-				fmt.Printf("❌ %v\n", err)
-			}
+			PrintIfErrorAndExit("Failed to Dial", err)
 			defer client.Close()
 
 			fromAddr := account.Address
 			nonce, err := client.PendingNonceAt(context.Background(), fromAddr)
-			if err != nil {
-				fmt.Printf("❌ %v\n", err)
-			}
+			PrintIfErrorAndExit("Failed to get Nonce", err)
 
 			gasLimit := uint64(3000000)
 			gasPrice := big.NewInt(1e9)
@@ -157,22 +131,16 @@ var contractDeployCmd = &cobra.Command{
 			data := append(bytecode, input...)
 			tx := types.NewContractCreation(nonce, value, gasLimit, gasPrice, data)
 			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), account.PrivateKey)
-			if err != nil {
-				fmt.Printf("❌ %v\n", err)
-			}
+			PrintIfErrorAndExit("Failed to sign Tx", err)
 
 			err = client.SendTransaction(context.Background(), signedTx)
-			if err != nil {
-				fmt.Printf("❌ %v\n", err)
-			}
+			PrintIfErrorAndExit("Failed to send Tx", err)
 
 			txHash := signedTx.Hash().Hex()
 			fmt.Printf("🚀 Deployment transaction sent. Hash: %s\n", txHash)
 
 			receipt, err := waitForReceipt(client, txHash)
-			if err != nil {
-				fmt.Printf("❌ %v\n", err)
-			}
+			PrintIfErrorAndExit("Failed waiting for Receipt", err)
 
 			addr := receipt.ContractAddress.Hex()
 			deploymentStatus := "failed"
@@ -222,10 +190,8 @@ var contractDeployCmd = &cobra.Command{
 				fmt.Printf("💾 Written output to: %s\n", targetDir)
 
 				solCopy := filepath.Join(versionedDir, filepath.Base(src))
-				println(solCopy)
-				if err := copyFile(src, solCopy); err != nil {
-					fmt.Printf("❌ Failed to copy .sol source: %v\n", err)
-				}
+				err = copyFile(src, solCopy)
+				PrintIfErrorAndExit("Failed to copy .sol source", err)
 			}
 		}
 	},
