@@ -48,10 +48,19 @@ var contractRunCmd = &cobra.Command{
 			}
 			fmt.Printf(" - %s(%s) -> %s\n", name, method.Inputs, mut)
 		}
+		method, exists := contractABI.Methods[methodName]
 
-		if _, exists := contractABI.Methods[methodName]; !exists {
+		if !exists {
 			fmt.Printf("❌ Method '%s' not found in contract ABI.\n", methodName)
 			os.Exit(1)
+		}
+
+		isView := method.StateMutability == "view" || method.StateMutability == "pure"
+
+		if isView {
+			fmt.Printf("ℹ️  Method '%s' is read-only (no gas needed).\n", methodName)
+		} else {
+			fmt.Printf("⛽  Method '%s' is transacted (requires gas).\n", methodName)
 		}
 
 		fmt.Println("📦 Parsed inputs:")
