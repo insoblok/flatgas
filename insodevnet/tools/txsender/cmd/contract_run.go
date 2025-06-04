@@ -223,10 +223,18 @@ var contractRunCmd = &cobra.Command{
 			gasPrice, err := client.SuggestGasPrice(ctx)
 			PrintIfErrorAndExit("Failed to get gas price", err)
 
+			valueStr, _ := cmd.Flags().GetString("value")
+			value := new(big.Int)
+			_, ok := value.SetString(valueStr, 10)
+			if !ok {
+				fmt.Printf("❌ Invalid value for --value: %s\n", valueStr)
+				os.Exit(1)
+			}
+
 			tx := types.NewTransaction(
 				nonce,
 				contractAddress,
-				big.NewInt(0), // value = 0 for method call
+				value,
 				gasLimit,
 				gasPrice,
 				inputData,
@@ -282,6 +290,7 @@ func init() {
 	contractRunCmd.Flags().String("rpc", "", "RPC endpoint to connect to")
 	contractRunCmd.Flags().String("password", "", "Password for account unlock")
 	contractRunCmd.Flags().Uint64("gas", 3000000, "Optional gas limit")
+	contractRunCmd.Flags().String("value", "0", "Value (in wei) to send with the transaction")
 
 	_ = contractRunCmd.MarkFlagRequired("dir")
 	_ = contractRunCmd.MarkFlagRequired("method")
