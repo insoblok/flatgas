@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
+	"go.etcd.io/bbolt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -16,6 +20,7 @@ var contractRunCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("🚀 txsender contract run starting...")
 
+		base, _ := cmd.Flags().GetString("base")
 		contractDir, _ := cmd.Flags().GetString("dir")
 		methodName, _ := cmd.Flags().GetString("method")
 		argsJSON, _ := cmd.Flags().GetString("args")
@@ -63,9 +68,43 @@ var contractRunCmd = &cobra.Command{
 			fmt.Printf("⛽  Method '%s' is transacted (requires gas).\n", methodName)
 		}
 
-		if isTransacted && from == "" {
-			fmt.Println("❌ This method modifies state and requires a sender (--from).")
-			os.Exit(1)
+		if isTransacted {
+			if from == "" {
+				fmt.Println("❌ This method modifies state and requires a sender (--from).")
+				os.Exit(1)
+			}
+
+			if password == "" {
+				fmt.Println("❌ --password is required.")
+				os.Exit(1)
+			}
+
+			dbPath := internal.GetAccountsDBFilePath(base)
+			db, err := bbolt.Open(dbPath, 0600, nil)
+			PrintIfErrorAndExit("failed to open DB", err)
+			defer db.Close()
+			var record internal.AliasRecord
+			err = db.View(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket([]byte("aliases"))
+				if bucket == nil {
+					return fmt.Errorf("Aliases bucket not found")
+				}
+
+				fmt.Println("Looking for alias", from)
+				data := bucket.Get([]byte(from))
+				if data == nil {
+					return fmt.Errorf("Alias not found: %s", from)
+				}
+				return json.Unmarshal(data, &record)
+			})
+			PrintIfErrorAndExit("Failed to read alias", err)
+
+			keyJSON, err := json.Marshal(record.Keystore)
+			PrintIfErrorAndExit("Failed to marshal keystore", err)
+
+			account, err := keystore.DecryptKey(keyJSON, password)
+			PrintIfErrorAndExit("Failed to decrypt key", err)
+			fmt.Println(account.Address.Hex())
 		}
 
 		fmt.Println("📦 Parsed inputs:")
@@ -80,6 +119,7 @@ var contractRunCmd = &cobra.Command{
 }
 
 func init() {
+	contractRunCmd.Flags().String("base", ".", "Contract dir (required)")
 	contractRunCmd.Flags().String("dir", "", "Contract dir (required)")
 	contractRunCmd.Flags().String("method", "", "Method name to call (required)")
 	contractRunCmd.Flags().String("args", "", "Constructor or method arguments as JSON array")
