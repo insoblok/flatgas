@@ -103,8 +103,9 @@ var contractRunCmd = &cobra.Command{
 				fmt.Printf("❌ Method '%s' expects %d argument(s), but got %d.\n", methodName, len(method.Inputs), len(parsedArgs))
 				os.Exit(1)
 			}
-			inputData, err = method.Inputs.Pack(parsedArgs...)
+			argData, err := method.Inputs.Pack(parsedArgs...)
 			PrintIfErrorAndExit("Failed to pack arguments", err)
+			inputData = append(method.ID, argData...)
 		} else {
 			if methodArgs != "" {
 				fmt.Printf("⚠️ Method '%s' does not take arguments. Provided --args will be ignored.\n", methodName)
