@@ -3,7 +3,7 @@
   "base": ".",
   "txCount": 5,
   "minIntervalSec": 2,
-  "maxIntervalSec": 10,
+  "maxIntervalSec": 15,
   "actions": [
     {
       "type": "fund",
@@ -13,7 +13,7 @@
         { "alias": "test02", "password": "SummerTime" }
       ],
       "toAccounts": [
-        "test00", "test01","test02"
+        "test00", "test01","test02", "test03"
       ],
       "amountWei": ["10000000000000000", "25000000000000000", "50000000000000000"]
     }
