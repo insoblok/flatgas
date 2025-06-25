@@ -59,8 +59,25 @@ var simulateFundCmd = &cobra.Command{
 		fmt.Println("🎉 Simulation done.")
 	},
 }
+var simulateScenarioSubCmd = &cobra.Command{
+	Use:   "scenario",
+	Short: "Run a transaction simulation scenario from a JSON specification",
+	Run: func(cmd *cobra.Command, args []string) {
+		specPath, _ := cmd.Flags().GetString("spec")
+		err := simulate.DoScenario(specPath)
+		if err != nil {
+			fmt.Println("❌ failed to run scenario: %v", err)
+		}
+		fmt.Println("🎉 Simulation done.")
+	},
+}
 
 func init() {
+	initFundSubCmd()
+	initScenarioSubCmd()
+}
+
+func initFundSubCmd() {
 	simulateCmd.AddCommand(simulateFundCmd)
 	simulateFundCmd.Flags().String("base", ".", "Base path to flatgas root")
 	simulateFundCmd.Flags().String("from", "", "Sender alias")
@@ -77,6 +94,11 @@ func init() {
 	_ = simulateFundCmd.MarkFlagRequired("amount")
 	_ = simulateFundCmd.MarkFlagRequired("rpc")
 	_ = simulateFundCmd.MarkFlagRequired("password")
+}
+func initScenarioSubCmd() {
+	simulateCmd.AddCommand(simulateScenarioSubCmd)
+	simulateScenarioSubCmd.Flags().String("spec", "", "Path to the JSON scenario file defining simulation parameters and transaction behavior")
+	_ = simulateScenarioSubCmd.MarkFlagRequired("spec")
 }
 
 func GetSimulateCommand() *cobra.Command {

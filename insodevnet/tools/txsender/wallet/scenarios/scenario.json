@@ -1,0 +1,21 @@
+{
+  "rpc": "http://localhost:8545",
+  "base": ".",
+  "txCount": 5,
+  "minIntervalSec": 2,
+  "maxIntervalSec": 10,
+  "actions": [
+    {
+      "type": "fund",
+      "fromAccounts": [
+        { "alias": "red", "password": "Yazan1Kinan2" },
+        { "alias": "test01", "password": "SummerTime" },
+        { "alias": "test02", "password": "SummerTime" }
+      ],
+      "toAccounts": [
+        "test00", "test01","test02"
+      ],
+      "amountWei": ["10000000000000000", "25000000000000000", "50000000000000000"]
+    }
+  ]
+}
