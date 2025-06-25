@@ -25,6 +25,7 @@ func main() {
 		cmd.GetKVAccountsCommand(),
 		cmd.GetTxStatusCommand(),
 		cmd.GetContractCommand(),
+		cmd.GetSimulateCommand(),
 	)
 	fmt.Println("🚀 txsender CLI starting...")
 
