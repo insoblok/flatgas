@@ -45,7 +45,6 @@ var simulateFundCmd = &cobra.Command{
 		for i := 1; i <= count; i++ {
 			fmt.Printf("🔁 Tx %d/%d: sending funds...\n", i, count)
 
-			// Reuse actual fund command logic
 			err := simulate.SendFunds(base, from, fromPassword, to, amount, rpcURL)
 			if err != nil {
 				fmt.Printf("❌ Tx %d failed: %v\n", i, err)
