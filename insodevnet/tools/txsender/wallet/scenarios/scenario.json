@@ -2,8 +2,8 @@
   "rpc": "http://localhost:8545",
   "base": ".",
   "txCount": 1000,
-  "minIntervalSec": 2,
-  "maxIntervalSec": 7,
+  "minIntervalSec": 1,
+  "maxIntervalSec": 5,
   "actions": [
     {
       "type": "fund",
