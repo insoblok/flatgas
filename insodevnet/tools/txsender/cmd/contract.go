@@ -76,6 +76,7 @@ var contractDeployCmd = &cobra.Command{
 			solcArgs = append(baseArgs, strings.Fields(solcExtra)...)
 		}
 
+		fmt.Println("🔧 solc args:", solcArgs)
 		command := exec.Command("solc", solcArgs...)
 		//command := exec.Command("solc", "--evm-version", "london", "--optimize", "--combined-json", "abi,bin", "--allow-paths", "/Users/iyadi/github/OpenZeppelin/openzeppelin-contracts", src)
 		cmdOut, err := command.CombinedOutput()
