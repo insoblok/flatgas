@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -78,9 +79,17 @@ var contractDeployCmd = &cobra.Command{
 
 		fmt.Println("🔧 solc args:", solcArgs)
 		command := exec.Command("solc", solcArgs...)
-		//command := exec.Command("solc", "--evm-version", "london", "--optimize", "--combined-json", "abi,bin", "--allow-paths", "/Users/iyadi/github/OpenZeppelin/openzeppelin-contracts", src)
-		cmdOut, err := command.CombinedOutput()
-		PrintIfErrorAndExit("Compilation failed", err)
+
+		var stdout, stderr bytes.Buffer
+		command.Stdout = &stdout
+		command.Stderr = &stderr
+
+		err = command.Run()
+		if err != nil {
+			fmt.Println("❌ solc error:")
+			fmt.Println(stderr.String()) // 🔍 Show solc errors here
+			os.Exit(1)
+		}
 
 		var solcOut struct {
 			Contracts map[string]struct {
@@ -88,6 +97,7 @@ var contractDeployCmd = &cobra.Command{
 				Bin string          `json:"bin"`
 			} `json:"contracts"`
 		}
+		cmdOut := stdout.Bytes()
 		err = json.Unmarshal(cmdOut, &solcOut)
 		PrintIfErrorAndExit("Failed to parse solc output", err)
 
