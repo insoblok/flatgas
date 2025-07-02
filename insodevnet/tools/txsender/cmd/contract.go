@@ -55,6 +55,7 @@ var contractDeployCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 		constructorArgs, _ := cmd.Flags().GetString("args")
 		gasLimit, _ := cmd.Flags().GetUint64("gas")
+		solcExtra, _ := cmd.Flags().GetString("solc-extra")
 
 		db, err := bbolt.Open(dbPath, 0600, nil)
 		PrintIfErrorAndExit("failed to open DB", err)
@@ -64,7 +65,20 @@ var contractDeployCmd = &cobra.Command{
 		err = validatePragmaVersion(src)
 		PrintIfErrorAndExit("Pragma check failed", err)
 
-		cmdOut, err := exec.Command("solc", "--evm-version", "london", "--combined-json", "abi,bin", src).Output()
+		baseArgs := []string{
+			"--evm-version", "london",
+			"--combined-json", "abi,bin",
+			"--optimize",
+			src,
+		}
+		solcArgs := baseArgs
+		if solcExtra != "" {
+			solcArgs = append(baseArgs, strings.Fields(solcExtra)...)
+		}
+
+		command := exec.Command("solc", solcArgs...)
+		//command := exec.Command("solc", "--evm-version", "london", "--optimize", "--combined-json", "abi,bin", "--allow-paths", "/Users/iyadi/github/OpenZeppelin/openzeppelin-contracts", src)
+		cmdOut, err := command.CombinedOutput()
 		PrintIfErrorAndExit("Compilation failed", err)
 
 		var solcOut struct {
@@ -245,6 +259,7 @@ func GetContractCommand() *cobra.Command {
 	contractDeployCmd.Flags().String("password", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("base", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("args", "", "Constructor arguments in JSON array format")
+	contractDeployCmd.Flags().String("solc-extra", "", "Extra flags to pass to solc (optional)")
 	contractDeployCmd.Flags().Uint64("gas", 3000000, "Optional gas limit for contract deployment")
 
 	contractDeployCmd.MarkFlagRequired("rpc")
