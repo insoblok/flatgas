@@ -57,6 +57,7 @@ var contractDeployCmd = &cobra.Command{
 		constructorArgs, _ := cmd.Flags().GetString("args")
 		gasLimit, _ := cmd.Flags().GetUint64("gas")
 		solcExtra, _ := cmd.Flags().GetString("solc-extra")
+		contractFilter, _ := cmd.Flags().GetString("contract")
 
 		db, err := bbolt.Open(dbPath, 0600, nil)
 		PrintIfErrorAndExit("failed to open DB", err)
@@ -101,10 +102,30 @@ var contractDeployCmd = &cobra.Command{
 		err = json.Unmarshal(cmdOut, &solcOut)
 		PrintIfErrorAndExit("Failed to parse solc output", err)
 
+		matched := false
+
 		for name, contract := range solcOut.Contracts {
 			fmt.Printf("✅ Found contract: %s\n", name)
 			fmt.Printf("📜 ABI: %s\n", contract.ABI)
 			fmt.Printf("🔢 Bytecode: %.20s... (%d bytes)\n", contract.Bin, len(contract.Bin)/2)
+
+			// 🔍 Filter by --contract if provided
+			if contractFilter != "" {
+				parts := strings.Split(name, ":")
+				if len(parts) != 2 || parts[1] != contractFilter {
+					continue
+				}
+				matched = true
+			}
+
+			if contractFilter != "" && !matched {
+				fmt.Printf("❌ No contract named '%s' found.\n", contractFilter)
+				fmt.Println("📜 Available contracts:")
+				for name := range solcOut.Contracts {
+					fmt.Println(" -", name)
+				}
+				os.Exit(1)
+			}
 
 			contractAbi, err := abi.JSON(strings.NewReader(string(contract.ABI)))
 			PrintIfErrorAndExit("Failed to parse ABI", err)
@@ -271,6 +292,7 @@ func GetContractCommand() *cobra.Command {
 	contractDeployCmd.Flags().String("base", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("args", "", "Constructor arguments in JSON array format")
 	contractDeployCmd.Flags().String("solc-extra", "", "Extra flags to pass to solc (optional)")
+	contractDeployCmd.Flags().String("contract", "", "Name of the contract to deploy (e.g. UserRegistry)")
 	contractDeployCmd.Flags().Uint64("gas", 3000000, "Optional gas limit for contract deployment")
 
 	contractDeployCmd.MarkFlagRequired("rpc")
