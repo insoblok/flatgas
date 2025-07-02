@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
@@ -142,7 +143,18 @@ var contractRunCmd = &cobra.Command{
 						log.Fatalf("Argument %d: expected string", i)
 					}
 					typedArgs = append(typedArgs, strVal)
-
+				case "bytes2":
+					strVal, ok := arg.(string)
+					if !ok || len(strVal) != 6 || !strings.HasPrefix(strVal, "0x") {
+						log.Fatalf("Argument %d: expected hex string (e.g. \"0x5553\") for bytes2", i)
+					}
+					data, err := hex.DecodeString(strVal[2:])
+					if err != nil || len(data) != 2 {
+						log.Fatalf("Argument %d: invalid bytes2 hex string", i)
+					}
+					var fixed [2]byte
+					copy(fixed[:], data)
+					typedArgs = append(typedArgs, fixed)
 				default:
 					log.Fatalf("Unsupported argument type: %s", expected)
 				}
