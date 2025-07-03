@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -13,6 +14,7 @@ import (
 	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
+	"log"
 	"math/big"
 	"os"
 	"os/exec"
@@ -146,7 +148,52 @@ var contractDeployCmd = &cobra.Command{
 			if constructorArgs != "" {
 				err = json.Unmarshal([]byte(constructorArgs), &parsedArgs)
 				PrintIfErrorAndExit("Failed to parse constructor arguments. Please pass them as a JSON array, e.g.: --args '[\"hello\", 42]'. Error", err)
-				input, err = contractAbi.Pack("", parsedArgs...)
+				var typedArgs []interface{}
+				for i, arg := range parsedArgs {
+					expected := constructor.Inputs[i].Type.String()
+					switch expected {
+					case "address":
+						str, ok := arg.(string)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected string for address", i)
+						}
+						typedArgs = append(typedArgs, common.HexToAddress(str))
+					case "uint256":
+						num, ok := arg.(float64)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected number for uint256", i)
+						}
+						typedArgs = append(typedArgs, big.NewInt(int64(num)))
+					case "bytes2":
+						str, ok := arg.(string)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected string for bytes2", i)
+						}
+						data, err := hex.DecodeString(strings.TrimPrefix(str, "0x"))
+						if err != nil || len(data) != 2 {
+							log.Fatalf("Constructor arg %d: expected 2-byte hex string for bytes2", i)
+						}
+						var b2 [2]byte
+						copy(b2[:], data)
+						typedArgs = append(typedArgs, b2)
+					case "string":
+						s, ok := arg.(string)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected string", i)
+						}
+						typedArgs = append(typedArgs, s)
+					case "bool":
+						b, ok := arg.(bool)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected bool", i)
+						}
+						typedArgs = append(typedArgs, b)
+					default:
+						log.Fatalf("Constructor arg %d: unsupported type %s", i, expected)
+					}
+				}
+
+				input, err = contractAbi.Pack("", typedArgs...)
 				PrintIfErrorAndExit("Failed to ABI encode constructor args", err)
 			}
 
