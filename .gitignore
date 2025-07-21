@@ -74,3 +74,10 @@ nodekey
 insodevnet/tools/txsender/wallet/keystore/**
 insodevnet/tools/txsender/txsender
 **/scrap/**
+/insodevnet/tools/txsender/contracts/outs/**
+/insodevnet/tools/txsender/wallet/accounts/**
+/insodevnet/tools/txsender/internal/txsender
+/insodevnet/tools/txsender/wallet/config/**
+/insodevnet/tools/txsender/wallet/kvstore/**
+/insodevnet/tools/txsender/wallet/tmp/**
+/insodevnet/tools/txsender/wallet/scenarios/scenario.json

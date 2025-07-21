@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -12,6 +14,7 @@ import (
 	"github.com/insoblok/flatgas/insodevnet/tools/txsender/internal"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
+	"log"
 	"math/big"
 	"os"
 	"os/exec"
@@ -55,6 +58,8 @@ var contractDeployCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 		constructorArgs, _ := cmd.Flags().GetString("args")
 		gasLimit, _ := cmd.Flags().GetUint64("gas")
+		solcExtra, _ := cmd.Flags().GetString("solc-extra")
+		contractFilter, _ := cmd.Flags().GetString("contract")
 
 		db, err := bbolt.Open(dbPath, 0600, nil)
 		PrintIfErrorAndExit("failed to open DB", err)
@@ -64,8 +69,30 @@ var contractDeployCmd = &cobra.Command{
 		err = validatePragmaVersion(src)
 		PrintIfErrorAndExit("Pragma check failed", err)
 
-		cmdOut, err := exec.Command("solc", "--evm-version", "london", "--combined-json", "abi,bin", src).Output()
-		PrintIfErrorAndExit("Compilation failed", err)
+		baseArgs := []string{
+			"--evm-version", "london",
+			"--combined-json", "abi,bin",
+			"--optimize",
+			src,
+		}
+		solcArgs := baseArgs
+		if solcExtra != "" {
+			solcArgs = append(baseArgs, strings.Fields(solcExtra)...)
+		}
+
+		fmt.Println("🔧 solc args:", solcArgs)
+		command := exec.Command("solc", solcArgs...)
+
+		var stdout, stderr bytes.Buffer
+		command.Stdout = &stdout
+		command.Stderr = &stderr
+
+		err = command.Run()
+		if err != nil {
+			fmt.Println("❌ solc error:")
+			fmt.Println(stderr.String()) // 🔍 Show solc errors here
+			os.Exit(1)
+		}
 
 		var solcOut struct {
 			Contracts map[string]struct {
@@ -73,13 +100,34 @@ var contractDeployCmd = &cobra.Command{
 				Bin string          `json:"bin"`
 			} `json:"contracts"`
 		}
+		cmdOut := stdout.Bytes()
 		err = json.Unmarshal(cmdOut, &solcOut)
 		PrintIfErrorAndExit("Failed to parse solc output", err)
+
+		matched := false
 
 		for name, contract := range solcOut.Contracts {
 			fmt.Printf("✅ Found contract: %s\n", name)
 			fmt.Printf("📜 ABI: %s\n", contract.ABI)
 			fmt.Printf("🔢 Bytecode: %.20s... (%d bytes)\n", contract.Bin, len(contract.Bin)/2)
+
+			// 🔍 Filter by --contract if provided
+			if contractFilter != "" {
+				parts := strings.Split(name, ":")
+				if len(parts) != 2 || parts[1] != contractFilter {
+					continue
+				}
+				matched = true
+			}
+
+			if contractFilter != "" && !matched {
+				fmt.Printf("❌ No contract named '%s' found.\n", contractFilter)
+				fmt.Println("📜 Available contracts:")
+				for name := range solcOut.Contracts {
+					fmt.Println(" -", name)
+				}
+				os.Exit(1)
+			}
 
 			contractAbi, err := abi.JSON(strings.NewReader(string(contract.ABI)))
 			PrintIfErrorAndExit("Failed to parse ABI", err)
@@ -100,7 +148,52 @@ var contractDeployCmd = &cobra.Command{
 			if constructorArgs != "" {
 				err = json.Unmarshal([]byte(constructorArgs), &parsedArgs)
 				PrintIfErrorAndExit("Failed to parse constructor arguments. Please pass them as a JSON array, e.g.: --args '[\"hello\", 42]'. Error", err)
-				input, err = contractAbi.Pack("", parsedArgs...)
+				var typedArgs []interface{}
+				for i, arg := range parsedArgs {
+					expected := constructor.Inputs[i].Type.String()
+					switch expected {
+					case "address":
+						str, ok := arg.(string)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected string for address", i)
+						}
+						typedArgs = append(typedArgs, common.HexToAddress(str))
+					case "uint256":
+						num, ok := arg.(float64)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected number for uint256", i)
+						}
+						typedArgs = append(typedArgs, big.NewInt(int64(num)))
+					case "bytes2":
+						str, ok := arg.(string)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected string for bytes2", i)
+						}
+						data, err := hex.DecodeString(strings.TrimPrefix(str, "0x"))
+						if err != nil || len(data) != 2 {
+							log.Fatalf("Constructor arg %d: expected 2-byte hex string for bytes2", i)
+						}
+						var b2 [2]byte
+						copy(b2[:], data)
+						typedArgs = append(typedArgs, b2)
+					case "string":
+						s, ok := arg.(string)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected string", i)
+						}
+						typedArgs = append(typedArgs, s)
+					case "bool":
+						b, ok := arg.(bool)
+						if !ok {
+							log.Fatalf("Constructor arg %d: expected bool", i)
+						}
+						typedArgs = append(typedArgs, b)
+					default:
+						log.Fatalf("Constructor arg %d: unsupported type %s", i, expected)
+					}
+				}
+
+				input, err = contractAbi.Pack("", typedArgs...)
 				PrintIfErrorAndExit("Failed to ABI encode constructor args", err)
 			}
 
@@ -245,6 +338,8 @@ func GetContractCommand() *cobra.Command {
 	contractDeployCmd.Flags().String("password", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("base", "", "Password to decrypt key")
 	contractDeployCmd.Flags().String("args", "", "Constructor arguments in JSON array format")
+	contractDeployCmd.Flags().String("solc-extra", "", "Extra flags to pass to solc (optional)")
+	contractDeployCmd.Flags().String("contract", "", "Name of the contract to deploy (e.g. UserRegistry)")
 	contractDeployCmd.Flags().Uint64("gas", 3000000, "Optional gas limit for contract deployment")
 
 	contractDeployCmd.MarkFlagRequired("rpc")
