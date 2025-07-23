@@ -29,7 +29,8 @@ func TestFundDryRun(t *testing.T) {
 
 	txsenderPath := filepath.Join(".", "txsender") // assumes binary is built here
 
-	cmd := exec.Command(txsenderPath,
+	cmd := exec.Command(
+		txsenderPath,
 		"fund",
 		"--rpc", "http://localhost:8545",
 		"--from", "faucet",
