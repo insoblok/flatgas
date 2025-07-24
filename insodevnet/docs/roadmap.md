@@ -2,25 +2,6 @@
 
 This document tracks the plan and evolution of the `insodevnet`, a Flatgas-powered test network intended to explore validator setup, network rules, and production-readiness.
 
----
-
-## 📂 Directory Structure Proposal
-
-```
-insodevnet/
-├── compose/                  # Docker Compose files for different setups
-│   └── docker-compose.yml
-├── genesis/                  # Network genesis files
-│   └── genesis.json
-├── nodes/                    # Node configurations (data, keys, scripts)
-│   ├── node1/
-│   └── node2/
-├── scripts/                  # Helper scripts (attach, logs, etc)
-│   └── attach-node.sh
-├── docs/                     # Documentation and experiments
-│   └── Roadmap.md            # <- This file
-└── README.md
-```
 
 ---
 
