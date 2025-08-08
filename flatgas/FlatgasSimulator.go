@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Transaction represents a simple Flatgas transaction
 type Transaction struct {
 	ID          string
 	Timestamp   time.Time
@@ -13,17 +12,14 @@ type Transaction struct {
 	IsEmergency bool
 }
 
-// Mempool is a simple FIFO queue of transactions
 type Mempool struct {
 	Queue []Transaction
 }
 
-// Add a transaction to the mempool
 func (m *Mempool) AddTx(tx Transaction) {
 	m.Queue = append(m.Queue, tx)
 }
 
-// Pop transactions up to a gas limit
 func (m *Mempool) PopTxs(maxGas uint64) ([]Transaction, uint64) {
 	var included []Transaction
 	var gasUsed uint64
@@ -37,14 +33,13 @@ func (m *Mempool) PopTxs(maxGas uint64) ([]Transaction, uint64) {
 	return included, gasUsed
 }
 
-// Block represents a mined block
 type Block struct {
 	Transactions []Transaction
 	TotalGasUsed uint64
 	TotalFees    uint64
 }
 
-const FixedGasPrice uint64 = 1000 // arbitrary unit, for showoff
+const FixedGasPrice uint64 = 1000
 
 func main() {
 	mempool := Mempool{}
@@ -61,7 +56,6 @@ func main() {
 		time.Sleep(100 * time.Millisecond) // simulate small delay
 	}
 
-	// Simulate block production
 	fmt.Println("Producing a block...")
 	includedTxs, gasUsed := mempool.PopTxs(1000000) // 1M gas limit
 	totalFees := gasUsed * FixedGasPrice
@@ -74,7 +68,6 @@ func main() {
 
 	fmt.Printf("Block created with %d transactions, total gas used: %d, total fees collected: %d units\n", len(block.Transactions), block.TotalGasUsed, block.TotalFees)
 
-	// List included transactions
 	for _, tx := range block.Transactions {
 		fmt.Printf("Included %s (Gas: %d)\n", tx.ID, tx.GasUsed)
 	}
