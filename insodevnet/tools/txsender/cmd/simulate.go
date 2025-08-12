@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/insoblok/flatgas/insodevnet/tools/txsender/cmd/simulate"
-	"github.com/spf13/cobra"
 	"math/big"
 	"time"
+
+	"github.com/insoblok/flatgas/insodevnet/tools/txsender/cmd/simulate"
+	"github.com/spf13/cobra"
 )
 
 var simulateCmd = &cobra.Command{
