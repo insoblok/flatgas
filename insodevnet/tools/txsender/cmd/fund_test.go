@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/stretchr/testify/require"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFundDryRun(t *testing.T) {
@@ -27,7 +28,7 @@ func TestFundDryRun(t *testing.T) {
 	aliasData, _ := json.MarshalIndent(aliases, "", "  ")
 	require.NoError(t, os.WriteFile(aliasFile, aliasData, 0644))
 
-	txsenderPath := filepath.Join(".", "txsender") // assumes binary is built here
+	txsenderPath := filepath.Join(".", "txsender")
 
 	cmd := exec.Command(
 		txsenderPath,
