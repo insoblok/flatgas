@@ -44,7 +44,6 @@ const FixedGasPrice uint64 = 1000
 func main() {
 	mempool := Mempool{}
 
-	// Simulate submitting transactions
 	for i := 0; i < 10; i++ {
 		tx := Transaction{
 			ID:          fmt.Sprintf("tx%d", i),
